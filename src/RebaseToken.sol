@@ -1,20 +1,20 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 // NOTE: name, symbol, decimals need to be included
-contract AToken is ERC20, Ownable {
+contract RebaseToken is ERC20, Ownable {
     uint256 public constant UINT_MAX_VALUE = type(uint256).max; //NOTE: how can I not use this? where is it used?
     uint256 constant PRECISION_FACTOR = 10 ** 27; // Used to handle fixed-point calculations
-    uint256 public s_interestRate = 5 * PRECISION_FACTOR / 100; // NOTE: how do I make this 0.05? // Linear interest rate per second, scaled by PRECISION_FACTOR
+    uint256 public s_interestRate = 5 * PRECISION_FACTOR / 1000;
     uint256 public s_accumulatedRate = PRECISION_FACTOR; // Initial rate of 1 (no growth)
     uint256 public s_lastUpdatedTimestamp;
-    address public pool;
-    address public vault;
+    address public s_pool;
+    address public s_vault;
 
-    mapping(address => uint256) private userIndexes;
+    mapping(address => uint256) private userIndexes; // NOTE: spelling
 
     event CumulativeIndexUpdated(uint256 index, uint256 timestamp);
     event MintOnDeposit(address indexed user, uint256 amount, uint256 balanceIncrease, uint256 index);
@@ -29,32 +29,99 @@ contract AToken is ERC20, Ownable {
         uint256 fromIndex,
         uint256 toIndex
     );
+    event Burn(address indexed user, uint256 amount, uint256 balanceIncrease, uint256 index);
 
     error RebaseToken__CannotRedeemZero();
     error RebaseToken__AmountGreaterThanBalance(uint256 amount, uint256 balance);
     error RebaseToken__SenderNotVault(address sender);
     error RebaseToken__SenderNotPool(address sender);
     error RebaseToken__CannotTransferZero();
+    error RebaseToken__SenderNotPoolOrVault(address sender);
 
     constructor(address _pool, address _vault) Ownable(msg.sender) ERC20("RebaseToken", "RBT") {
         s_lastUpdatedTimestamp = block.timestamp;
-        pool = _pool;
-        vault = _vault;
-        //updateAccumulationRate(); // NOTE: can I remove this
+        s_pool = _pool;
+        s_vault = _vault;
     }
 
     modifier onlyVault() {
-        if (msg.sender != vault) {
+        if (msg.sender != s_vault) {
             revert RebaseToken__SenderNotVault(msg.sender);
         }
         _;
     }
 
+    modifier onlyPoolOrVault() {
+        if (msg.sender != s_pool && msg.sender != s_vault) {
+            revert RebaseToken__SenderNotPoolOrVault(msg.sender);
+        }
+        _;
+    }§
+
     modifier onlyPool() {
-        if (msg.sender != pool) {
+        if (msg.sender != s_pool) {
             revert RebaseToken__SenderNotPool(msg.sender);
         }
         _;
+    }
+
+    function getUserInfo(address user) external returns (uint256, uint256, uint256) {
+        return (userIndexes[user], s_accumulatedRate, s_lastUpdatedTimestamp);
+    }
+
+    function setUserInfo(address user, uint256 index, uint256 rate, uint256 timestamp) external onlyPool {
+        userIndexes[user] = index;
+        s_accumulatedRate = rate;
+        s_lastUpdatedTimestamp = timestamp;
+    }
+
+    /// @notice Mints new tokens for a given address.
+    /// @param account The address to mint the new tokens to.
+    /// @param amount The number of tokens to be minted.
+    /// @dev this function increases the total supply.
+    function mint(address account, uint256 amount) external onlyPoolOrVault {
+        if (amount == 0) {
+            revert RebaseToken__CannotTransferZero();
+        }
+
+        // accumulates the balance of the user
+        (,, uint256 balanceIncrease, uint256 index) = _accumulateBalanceInternal(account);
+
+        // mint an equivalent amount of tokens to cover the new deposit
+        _mint(account, amount);
+
+        emit MintOnDeposit(account, amount, balanceIncrease, index);
+    }
+
+    /// @notice Burns tokens from the sender.
+    /// @param amount The number of tokens to be burned.
+    /// @dev this function decreases the total supply.
+    function burn(address account, uint256 amount) external onlyPool {
+        if (amount == 0) {
+            revert RebaseToken__CannotTransferZero();
+        }
+
+        // accumulates the balance of the user
+        (, uint256 currentBalance, uint256 balanceIncrease, uint256 index) = _accumulateBalanceInternal(account);
+
+        //if amount is equal to uint(-1), the user wants to redeem everything
+        if (amount == UINT_MAX_VALUE) {
+            amount = currentBalance;
+        }
+
+        if (amount > currentBalance) {
+            revert RebaseToken__AmountGreaterThanBalance(amount, currentBalance);
+        }
+
+        // burns tokens equivalent to the amount requested
+        _burn(account, amount);
+
+        //reset the user data if the remaining balance is 0
+        if (currentBalance - amount == 0) {
+            userIndexes[account] = 0;
+        }
+
+        emit Burn(account, amount, balanceIncrease, userIndexes[account]);
     }
 
     /**
@@ -67,8 +134,7 @@ contract AToken is ERC20, Ownable {
             revert RebaseToken__CannotRedeemZero();
         }
 
-        //cumulates the balance of the user
-        // NOTE: change this!
+        // accumulates the balance of the user
         (, uint256 currentBalance, uint256 balanceIncrease, uint256 index) = _accumulateBalanceInternal(msg.sender);
 
         uint256 amountToRedeem = _amount;
@@ -85,7 +151,7 @@ contract AToken is ERC20, Ownable {
         // burns tokens equivalent to the amount requested
         _burn(msg.sender, amountToRedeem);
 
-        bool userIndexReset = false;
+        bool userIndexReset = false; // NOTE: remove as above
         //reset the user data if the remaining balance is 0
         if (currentBalance - amountToRedeem == 0) {
             userIndexes[msg.sender] = 0;
@@ -94,53 +160,11 @@ contract AToken is ERC20, Ownable {
 
         // executes redeem of the underlying asset
         // NOTE: Implement on the vault contract
-        // payable(msg.sender).transfer(amountToRedeem);
         // updateAccumulatedRate(); // NOTE: surely this only needs to be called if interestRate changes? otherwise it's just linear with time anyway?
         payable(msg.sender).transfer(amountToRedeem);
         //vault.redeem(msg.sender, amountToRedeem);
         emit Redeem(msg.sender, amountToRedeem, balanceIncrease, userIndexReset ? 0 : index);
     }
-
-    /**
-     * @dev mints token in the event of users depositing the underlying asset into the vault
-     * only vault can call this function
-     * @param _account the address receiving the minted tokens
-     * @param _amount the amount of tokens to mint
-     */
-    function mintOnDeposit(address _account, uint256 _amount) external onlyVault {
-        //cumulates the balance of the user
-        (,, uint256 balanceIncrease, uint256 index) = _accumulateBalanceInternal(_account);
-
-        //mint an equivalent amount of tokens to cover the new deposit
-        _mint(_account, _amount);
-
-        emit MintOnDeposit(_account, _amount, balanceIncrease, index);
-    }
-
-    // /**
-    //  * @dev burns token in the event of a borrow being liquidated, in case the liquidators reclaims the underlying asset
-    //  * Transfer of the liquidated asset is executed by the lending pool contract.
-    //  * only vault can call this function
-    //  * @param _account the address from which burn the aTokens
-    //  * @param _value the amount to burn
-    //  *
-    //  */
-    // function burnOnWithdraw(address _account, uint256 _value) external onlyVault {
-    //     //cumulates the balance of the user being liquidated
-    //     (, uint256 accountBalance, uint256 balanceIncrease, uint256 index) = _accumulateBalanceInternal(_account);
-
-    //     //burns the requested amount of tokens
-    //     _burn(_account, _value);
-
-    //     bool userIndexReset = false;
-    //     //reset the user data if the remaining balance is 0
-    //     if (accountBalance - _value == 0) {
-    //         userIndexes[_account] = 0;
-    //         userIndexReset = true;
-    //     }
-
-    //     emit BurnOnWithdraw(_account, _value, balanceIncrease, userIndexReset ? 0 : index);
-    // }
 
     /**
      * @dev calculates the balance of the user, which is the
@@ -205,6 +229,8 @@ contract AToken is ERC20, Ownable {
      *
      */
     function _accumulateBalanceInternal(address _user) internal returns (uint256, uint256, uint256, uint256) {
+        //NOTE: DO they lose this is updateAccumlatedRate is called
+        //NOTE: make internal function / make it public
         uint256 previousPrincipalBalance = super.balanceOf(_user);
 
         // Calculate the accrued interest since the last accumulation
@@ -216,7 +242,7 @@ contract AToken is ERC20, Ownable {
         _mint(_user, balanceIncrease);
 
         // Update the user's index to reflect the new state
-        userIndexes[_user] = _getNormalizedIncome();
+        userIndexes[_user] = _getNormalizedIncome(); // NOTE: check this (is it an index or an amount)
         return (previousPrincipalBalance, currentBalance, balanceIncrease, userIndexes[_user]);
     }
 
@@ -270,6 +296,7 @@ contract AToken is ERC20, Ownable {
     }
 
     function transferFrom(address sender, address recipient, uint256 amount) public override returns (bool) {
+        // NOTE: check allowances here
         _interalTransfer(sender, recipient, amount);
         return true;
     }
@@ -296,6 +323,7 @@ contract AToken is ERC20, Ownable {
         //performs the transfer
         super._transfer(_from, _to, _value);
 
+        // NOTE: update as above
         bool fromIndexReset = false;
         //reset the user data if the remaining balance is 0
         if (fromBalance - _value == 0) {

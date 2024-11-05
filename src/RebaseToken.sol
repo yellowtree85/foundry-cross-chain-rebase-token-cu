@@ -14,7 +14,7 @@ contract RebaseToken is ERC20, Ownable {
     address public s_pool;
     address public s_vault;
 
-    mapping(address => uint256) private userIndexes; // NOTE: spelling
+    mapping(address => uint256) private userIndexes; // NOTE: spelling, do I change to interestGained
 
     event CumulativeIndexUpdated(uint256 index, uint256 timestamp);
     event MintOnDeposit(address indexed user, uint256 amount, uint256 balanceIncrease, uint256 index);
@@ -56,7 +56,7 @@ contract RebaseToken is ERC20, Ownable {
             revert RebaseToken__SenderNotPoolOrVault(msg.sender);
         }
         _;
-    }§
+    }
 
     modifier onlyPool() {
         if (msg.sender != s_pool) {
@@ -65,7 +65,7 @@ contract RebaseToken is ERC20, Ownable {
         _;
     }
 
-    function getUserInfo(address user) external returns (uint256, uint256, uint256) {
+    function getUserInfo(address user) external view returns (uint256, uint256, uint256) {
         return (userIndexes[user], s_accumulatedRate, s_lastUpdatedTimestamp);
     }
 
@@ -85,7 +85,7 @@ contract RebaseToken is ERC20, Ownable {
         }
 
         // accumulates the balance of the user
-        (,, uint256 balanceIncrease, uint256 index) = _accumulateBalanceInternal(account);
+        (,, uint256 balanceIncrease, uint256 index) = _applyAccruedInterest(account);
 
         // mint an equivalent amount of tokens to cover the new deposit
         _mint(account, amount);
@@ -102,7 +102,7 @@ contract RebaseToken is ERC20, Ownable {
         }
 
         // accumulates the balance of the user
-        (, uint256 currentBalance, uint256 balanceIncrease, uint256 index) = _accumulateBalanceInternal(account);
+        (, uint256 currentBalance, uint256 balanceIncrease, uint256 index) = _applyAccruedInterest(account);
 
         //if amount is equal to uint(-1), the user wants to redeem everything
         if (amount == UINT_MAX_VALUE) {
@@ -135,7 +135,7 @@ contract RebaseToken is ERC20, Ownable {
         }
 
         // accumulates the balance of the user
-        (, uint256 currentBalance, uint256 balanceIncrease, uint256 index) = _accumulateBalanceInternal(msg.sender);
+        (, uint256 currentBalance, uint256 balanceIncrease, uint256 index) = _applyAccruedInterest(msg.sender);
 
         uint256 amountToRedeem = _amount;
 
@@ -179,7 +179,7 @@ contract RebaseToken is ERC20, Ownable {
         if (currentPrincipalBalance == 0) {
             return 0;
         }
-        // shares * current accumulated interest / interest when they deposited
+        // shares * current accumulated interest / interest when they deposited (or interest was minted to them)
         return currentPrincipalBalance * _getNormalizedIncome() / userIndexes[_user];
     }
 
@@ -228,7 +228,7 @@ contract RebaseToken is ERC20, Ownable {
      * and the new user index
      *
      */
-    function _accumulateBalanceInternal(address _user) internal returns (uint256, uint256, uint256, uint256) {
+    function _applyAccruedInterest(address _user) internal returns (uint256, uint256, uint256, uint256) {
         //NOTE: DO they lose this is updateAccumlatedRate is called
         //NOTE: make internal function / make it public
         uint256 previousPrincipalBalance = super.balanceOf(_user);
@@ -297,6 +297,8 @@ contract RebaseToken is ERC20, Ownable {
 
     function transferFrom(address sender, address recipient, uint256 amount) public override returns (bool) {
         // NOTE: check allowances here
+        address spender = msg.sender;
+        _spendAllowance(sender, spender, amount);
         _interalTransfer(sender, recipient, amount);
         return true;
     }
@@ -315,10 +317,10 @@ contract RebaseToken is ERC20, Ownable {
         }
 
         //cumulate the balance of the sender
-        (, uint256 fromBalance, uint256 fromBalanceIncrease, uint256 fromIndex) = _accumulateBalanceInternal(_from);
+        (, uint256 fromBalance, uint256 fromBalanceIncrease, uint256 fromIndex) = _applyAccruedInterest(_from);
 
         //cumulate the balance of the receiver
-        (,, uint256 toBalanceIncrease, uint256 toIndex) = _accumulateBalanceInternal(_to);
+        (,, uint256 toBalanceIncrease, uint256 toIndex) = _applyAccruedInterest(_to);
 
         //performs the transfer
         super._transfer(_from, _to, _value);

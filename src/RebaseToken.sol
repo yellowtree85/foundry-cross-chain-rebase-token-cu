@@ -124,6 +124,12 @@ contract RebaseToken is ERC20, Ownable {
         emit Burn(account, amount, balanceIncrease, userIndexes[account]);
     }
 
+    function deposit(uint256 amount) external {
+        // NOTE: Implement on the vault contract
+        //vault.deposit(msg.sender, amount);
+        emit MintOnDeposit(msg.sender, amount, 0, 0);
+    }
+
     /**
      * @dev redeems rebase token for the underlying asset
      * @param _amount the amount being redeemed

@@ -180,7 +180,7 @@ contract RebaseToken is ERC20, Ownable {
             return 0;
         }
         // shares * current accumulated interest / interest when they deposited (or interest was minted to them)
-        return currentPrincipalBalance * _getNormalizedIncome() / userIndexes[_user];
+        return currentPrincipalBalance * _calculateAccumulatedInterest() / userIndexes[_user];
     }
 
     /**
@@ -208,7 +208,7 @@ contract RebaseToken is ERC20, Ownable {
             return 0;
         }
 
-        return currentSupplyPrincipal * _getNormalizedIncome();
+        return currentSupplyPrincipal * _calculateAccumulatedInterest();
     }
 
     /**
@@ -242,7 +242,7 @@ contract RebaseToken is ERC20, Ownable {
         _mint(_user, balanceIncrease);
 
         // Update the user's index to reflect the new state
-        userIndexes[_user] = _getNormalizedIncome(); // NOTE: check this (is it an index or an amount)
+        userIndexes[_user] = _calculateAccumulatedInterest(); // NOTE: check this (is it an index or an amount)
         return (previousPrincipalBalance, currentBalance, balanceIncrease, userIndexes[_user]);
     }
 
@@ -251,21 +251,24 @@ contract RebaseToken is ERC20, Ownable {
      * @return the normalized income
      *
      */
-    function _getNormalizedIncome() internal view returns (uint256) {
-        // Calculate the updated accumulated rate
-        return s_accumulatedRate * _calculateLinearInterest() / PRECISION_FACTOR;
+    function _calculateAccumulatedInterest() internal view returns (uint256) {
+        uint256 timeDifference = block.timestamp - s_lastUpdatedTimestamp;
+        // represents the linear growth over time = 1 + (interest rate * time)
+        uint256 linearInterest = s_interestRate * timeDifference + PRECISION_FACTOR;
+        // Calculate the total amount accumulated since the last update
+        return s_accumulatedRate * linearInterest / PRECISION_FACTOR;
     }
 
-    /**
-     * @dev calculates the linear interest factor
-     * @return the linear interest factor
-     *
-     */
-    function _calculateLinearInterest() internal view returns (uint256) {
-        uint256 timeDifference = block.timestamp - s_lastUpdatedTimestamp;
-        // Calculate the linear interest factor over the elapsed time
-        return (s_interestRate * timeDifference + PRECISION_FACTOR);
-    }
+    // /**
+    //  * @dev calculates the linear interest factor
+    //  * @return the linear interest factor
+    //  *
+    //  */
+    // function _calculateLinearInterest() internal view returns (uint256) {
+    //     uint256 timeDifference = block.timestamp - s_lastUpdatedTimestamp;
+    //     // Calculate the linear interest factor over the elapsed time
+    //     return (s_interestRate * timeDifference + PRECISION_FACTOR);
+    // }
 
     /**
      * @dev updates the accumulated rate and the last updated timestamp
@@ -274,9 +277,10 @@ contract RebaseToken is ERC20, Ownable {
      */
     function _updateAccumulatedRate() internal {
         // Calculate the updated cumulative index
-        s_accumulatedRate = _getNormalizedIncome();
+        s_accumulatedRate = _calculateAccumulatedInterest();
         s_lastUpdatedTimestamp = block.timestamp;
-        // NOTE: send a cross-chain message!
+        // NOTE: send a cross-chain message! Implements as before:) only data no tokens
+        // _sendMessagePayLINK()
         emit CumulativeIndexUpdated(s_accumulatedRate, s_lastUpdatedTimestamp);
     }
 
@@ -291,7 +295,7 @@ contract RebaseToken is ERC20, Ownable {
     }
 
     function transfer(address recipient, uint256 amount) public override returns (bool) {
-        _interalTransfer(msg.sender, recipient, amount);
+        _internalTransfer(msg.sender, recipient, amount);
         return true;
     }
 
@@ -299,7 +303,7 @@ contract RebaseToken is ERC20, Ownable {
         // NOTE: check allowances here
         address spender = msg.sender;
         _spendAllowance(sender, spender, amount);
-        _interalTransfer(sender, recipient, amount);
+        _internalTransfer(sender, recipient, amount);
         return true;
     }
 
@@ -311,7 +315,7 @@ contract RebaseToken is ERC20, Ownable {
      * @param _value the amount to transfer
      *
      */
-    function _interalTransfer(address _from, address _to, uint256 _value) internal {
+    function _internalTransfer(address _from, address _to, uint256 _value) internal {
         if (_value <= 0) {
             revert RebaseToken__CannotTransferZero();
         }

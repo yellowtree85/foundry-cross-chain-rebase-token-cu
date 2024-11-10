@@ -12,7 +12,6 @@ contract RebaseToken is ERC20, Ownable {
     uint256 public s_accumulatedRate = PRECISION_FACTOR; // Initial rate of 1 (no growth)
     uint256 public s_lastUpdatedTimestamp;
     address public s_pool;
-    address public s_vault;
 
     mapping(address => uint256) private userIndexes; // NOTE: spelling, do I change to interestGained
 
@@ -40,20 +39,6 @@ contract RebaseToken is ERC20, Ownable {
         s_lastUpdatedTimestamp = block.timestamp;
     }
 
-    modifier onlyVault() {
-        if (msg.sender != s_vault) {
-            revert RebaseToken__SenderNotVault(msg.sender);
-        }
-        _;
-    }
-
-    modifier onlyPoolOrVault() {
-        if (msg.sender != s_pool && msg.sender != s_vault) {
-            revert RebaseToken__SenderNotPoolOrVault(msg.sender);
-        }
-        _;
-    }
-
     modifier onlyPool() {
         if (msg.sender != s_pool) {
             revert RebaseToken__SenderNotPool(msg.sender);
@@ -61,8 +46,7 @@ contract RebaseToken is ERC20, Ownable {
         _;
     }
 
-    function setVaultAndPool(address vault, address pool) external onlyOwner {
-        s_vault = vault;
+    function setPool(address pool) external onlyOwner {
         s_pool = pool;
     }
 
@@ -217,41 +201,6 @@ contract RebaseToken is ERC20, Ownable {
         uint256 linearInterest = s_interestRate * timeDifference + PRECISION_FACTOR;
         // Calculate the total amount accumulated since the last update
         return s_accumulatedRate * linearInterest / PRECISION_FACTOR;
-    }
-
-    // /**
-    //  * @dev calculates the linear interest factor
-    //  * @return the linear interest factor
-    //  *
-    //  */
-    // function _calculateLinearInterest() internal view returns (uint256) {
-    //     uint256 timeDifference = block.timestamp - s_lastUpdatedTimestamp;
-    //     // Calculate the linear interest factor over the elapsed time
-    //     return (s_interestRate * timeDifference + PRECISION_FACTOR);
-    // }
-
-    /**
-     * @dev updates the accumulated rate and the last updated timestamp
-     * @notice this function should be called every time the interest rate changes
-     *
-     */
-    function _updateAccumulatedRate() internal {
-        // Calculate the updated cumulative index
-        s_accumulatedRate = _calculateAccumulatedInterest();
-        s_lastUpdatedTimestamp = block.timestamp;
-        // NOTE: send a cross-chain message! Implements as before:) only data no tokens
-        // _sendMessagePayLINK()
-        emit CumulativeIndexUpdated(s_accumulatedRate, s_lastUpdatedTimestamp);
-    }
-
-    /**
-     * @dev updates the interest rate
-     * @param _interestRate the new interest rate
-     *
-     */
-    function updateInterestRate(uint256 _interestRate) external onlyOwner {
-        _updateAccumulatedRate();
-        s_interestRate = _interestRate;
     }
 
     function transfer(address recipient, uint256 amount) public override returns (bool) {

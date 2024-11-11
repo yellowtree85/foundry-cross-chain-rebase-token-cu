@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.24;
 
-import {Pool} from "@chainlink/contracts/src/v0.8/ccip/libraries/Pool.sol";
-import {TokenPool} from "@chainlink/contracts/src/v0.8/ccip/pools/TokenPool.sol";
-import {IERC20} from
-    "@chainlink/contracts/src/v0.8/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
+import {Pool} from "@ccip/contracts/src/v0.8/ccip/libraries/Pool.sol";
+import {TokenPool} from "@ccip/contracts/src/v0.8/ccip/pools/TokenPool.sol";
+import {IERC20} from "@ccip/contracts/src/v0.8/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
 import {IRebaseToken} from "./interfaces/IRebaseToken.sol";
 
 contract DestPool is TokenPool {

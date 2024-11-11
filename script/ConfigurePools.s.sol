@@ -2,17 +2,15 @@
 pragma solidity ^0.8.24;
 
 import {Script} from "forge-std/Script.sol";
-import {TokenPool} from "@chainlink/contracts-ccip/src/v0.8/ccip/pools/BurnMintTokenPool.sol";
-import {RateLimiter} from "@chainlink/contracts-ccip/src/v0.8/ccip/libraries/RateLimiter.sol";
-import {DestPool} from "../src/DestPool.sol";
-import {SourcePool} from "../src/SourcePool.sol";
+import {TokenPool} from "@ccip/contracts/src/v0.8/ccip/pools/BurnMintTokenPool.sol";
+import {RateLimiter} from "@ccip/contracts/src/v0.8/ccip/libraries/RateLimiter.sol";
 
 contract ConfigurePoolScript is Script {
     function run(
-        address sourceChainPoolAddress,
-        uint64 destinationChainSelector,
-        address destinationPoolAddress,
-        address destinationTokenAddress,
+        address ccipChainPoolAddress,
+        uint64 remoteChainSelector,
+        address remotePoolAddress,
+        address remoteTokenAddress,
         bool outboundRateLimiterIsEnabled,
         uint128 outboundRateLimiterCapacity,
         uint128 outboundRateLimiterRate,
@@ -24,14 +22,14 @@ contract ConfigurePoolScript is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(deployerPrivateKey);
 
-        TokenPool tokenPool = TokenPool(tokenPool);
+        TokenPool tokenPool = TokenPool(ccipChainPoolAddress);
 
         TokenPool.ChainUpdate[] memory chains = new TokenPool.ChainUpdate[](1);
         chains[0] = TokenPool.ChainUpdate({
-            remoteChainSelector: destinationChainSelector,
+            remoteChainSelector: remoteChainSelector,
             allowed: true,
-            remotePoolAddress: abi.encode(destinationPoolAddress),
-            remoteTokenAddress: abi.encode(destinationTokenAddress),
+            remotePoolAddress: abi.encode(remotePoolAddress),
+            remoteTokenAddress: abi.encode(remoteTokenAddress),
             outboundRateLimiterConfig: RateLimiter.Config({
                 isEnabled: outboundRateLimiterIsEnabled,
                 capacity: outboundRateLimiterCapacity,

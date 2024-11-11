@@ -3,10 +3,12 @@ pragma solidity ^0.8.24;
 
 import {Script} from "forge-std/Script.sol";
 import {CCIPLocalSimulatorFork, Register} from "@chainlink/local/src/ccip/CCIPLocalSimulatorFork.sol";
-import {RegistryModuleOwnerCustom} from "@ccip/src/v0.8/ccip/tokenAdminRegistry/RegistryModuleOwnerCustom.sol";
-import {TokenAdminRegistry} from "@ccip/src/v0.8/ccip/tokenAdminRegistry/TokenAdminRegistry.sol";
+import {RegistryModuleOwnerCustom} from "@ccip/contracts/src/v0.8/ccip/tokenAdminRegistry/RegistryModuleOwnerCustom.sol";
+import {TokenAdminRegistry} from "@ccip/contracts/src/v0.8/ccip/tokenAdminRegistry/TokenAdminRegistry.sol";
+import {IERC20} from "@ccip/contracts/src/v0.8/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
 
-import {RebaseToken} from "../src/RebaseToken.sol";
+import {SourceRebaseToken} from "../src/SourceRebaseToken.sol";
+import {IRebaseToken} from "../src/interfaces/IRebaseToken.sol";
 import {SourcePool} from "../src/SourcePool.sol";
 import {Vault} from "../src/Vault.sol";
 
@@ -14,7 +16,7 @@ contract SourceDeployer is Script {
     CCIPLocalSimulatorFork public ccipLocalSimulatorFork;
     Register.NetworkDetails networkDetails;
 
-    RebaseToken public token;
+    SourceRebaseToken public token;
 
     RegistryModuleOwnerCustom registryModuleOwnerCustom;
     TokenAdminRegistry tokenAdminRegistry;
@@ -33,15 +35,15 @@ contract SourceDeployer is Script {
         vm.startBroadcast(deployerPrivateKey);
 
         // Step 1) Deploy token
-        token = new RebaseToken();
+        token = new SourceRebaseToken();
 
         // Step 2) Deploy SourcePool
         address[] memory allowlist = new address[](0);
         SourcePool sourcePool = new SourcePool(
-            RebaseToken(address(token)), allowlist, networkDetails.rmnProxyAddress, networkDetails.routerAddress
+            IERC20(address(token)), allowlist, networkDetails.rmnProxyAddress, networkDetails.routerAddress
         );
 
-        Vault vault = new Vault(token);
+        Vault vault = new Vault(IRebaseToken(address(token)));
 
         // Step 3) set the vault and pool for the token
         token.setVaultAndPool(address(sourcePool), address(vault));

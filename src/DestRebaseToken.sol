@@ -5,7 +5,7 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 // NOTE: name, symbol, decimals need to be included
-contract RebaseToken is ERC20, Ownable {
+contract DestRebaseToken is ERC20, Ownable {
     uint256 public constant UINT_MAX_VALUE = type(uint256).max; //NOTE: how can I not use this? where is it used?
     uint256 constant PRECISION_FACTOR = 10 ** 27; // Used to handle fixed-point calculations
     uint256 public s_interestRate = 5 * PRECISION_FACTOR / 1000;
@@ -64,7 +64,7 @@ contract RebaseToken is ERC20, Ownable {
     /// @param account The address to mint the new tokens to.
     /// @param amount The number of tokens to be minted.
     /// @dev this function increases the total supply.
-    function mint(address account, uint256 amount) external onlyPoolOrVault {
+    function mint(address account, uint256 amount) external onlyPool {
         if (amount == 0) {
             revert RebaseToken__CannotTransferZero();
         }

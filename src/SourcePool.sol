@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.24;
 
-import {IBurnMintERC20} from "@chainlink/contracts/src/v0.8/shared/token/ERC20/IBurnMintERC20.sol";
-import {Pool} from "@chainlink/contracts/src/v0.8/ccip/libraries/Pool.sol";
-import {TokenPool} from "@chainlink/contracts/src/v0.8/ccip/pools/TokenPool.sol";
+import {IBurnMintERC20} from "@ccip/contracts/src/v0.8/shared/token/ERC20/IBurnMintERC20.sol";
+import {Pool} from "@ccip/contracts/src/v0.8/ccip/libraries/Pool.sol";
+import {TokenPool} from "@ccip/contracts/src/v0.8/ccip/pools/TokenPool.sol";
 import {IRebaseToken} from "./interfaces/IRebaseToken.sol";
-import {IERC20} from
-    "@chainlink/contracts/src/v0.8/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
+import {IERC20} from "@ccip/contracts/src/v0.8/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
 
 contract SourcePool is TokenPool {
     constructor(IERC20 token, address[] memory allowlist, address rmnProxy, address router)

@@ -3,9 +3,9 @@ pragma solidity ^0.8.24;
 
 import {Script} from "forge-std/Script.sol";
 import {CCIPLocalSimulatorFork, Register} from "@chainlink/local/src/ccip/CCIPLocalSimulatorFork.sol";
-import {RegistryModuleOwnerCustom} from
-    "@chainlink/contracts-ccip/src/v0.8/ccip/tokenAdminRegistry/RegistryModuleOwnerCustom.sol";
-import {TokenAdminRegistry} from "@chainlink/contracts-ccip/src/v0.8/ccip/tokenAdminRegistry/TokenAdminRegistry.sol";
+import {RegistryModuleOwnerCustom} from "@ccip/contracts/src/v0.8/ccip/tokenAdminRegistry/RegistryModuleOwnerCustom.sol";
+import {TokenAdminRegistry} from "@ccip/contracts/src/v0.8/ccip/tokenAdminRegistry/TokenAdminRegistry.sol";
+import {IERC20} from "@ccip/contracts/src/v0.8/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
 
 import {DestRebaseToken} from "../src/DestRebaseToken.sol";
 import {DestPool} from "../src/DestPool.sol";
@@ -38,7 +38,7 @@ contract DestDeployer is Script {
         // Step 2) Deploy pool
         address[] memory allowlist = new address[](0);
         DestPool pool = new DestPool(
-            DestRebaseToken(address(token)), allowlist, networkDetails.rmnProxyAddress, networkDetails.routerAddress
+            IERC20(address(token)), allowlist, networkDetails.rmnProxyAddress, networkDetails.routerAddress
         );
 
         // Step 3) set pool on the token contract for permissions
@@ -51,7 +51,7 @@ contract DestDeployer is Script {
         tokenAdminRegistry.acceptAdminRole(address(token));
 
         // Step 6) Link token to pool in the token admin registry
-        tokenAdminRegistry.setPool(address(token), address(burnMintTokenPool));
+        tokenAdminRegistry.setPool(address(token), address(pool));
 
         vm.stopBroadcast();
     }

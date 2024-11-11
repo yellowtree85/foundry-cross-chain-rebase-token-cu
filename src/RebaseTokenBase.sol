@@ -13,7 +13,7 @@ contract RebaseTokenBase is ERC20, Ownable {
     uint256 public s_lastUpdatedTimestamp;
     address public s_pool;
 
-    mapping(address => uint256) private userIndexes; // NOTE: spelling, do I change to interestGained
+    mapping(address => uint256) public userIndexes; // NOTE: spelling, do I change to interestGained
 
     event CumulativeIndexUpdated(uint256 index, uint256 timestamp);
     event BalanceTransfer(

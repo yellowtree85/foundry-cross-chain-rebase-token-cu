@@ -7,7 +7,9 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {RebaseTokenBase} from "./RebaseTokenBase.sol";
 
 // NOTE: name, symbol, decimals need to be included
-contract RebaseToken is RebaseTokenBase {
+contract SourceRebaseToken is RebaseTokenBase {
+    address public s_vault;
+
     event AccumulatedRateUpdated(uint256 index, uint256 timestamp);
     event VaultAndPoolSet(address vault, address pool);
 

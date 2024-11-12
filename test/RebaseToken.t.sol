@@ -1,137 +1,169 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import {Test} from "forge-std/Test.sol";
-
-import {CCIPLocalSimulatorFork, Register} from "@chainlink/local/src/ccip/CCIPLocalSimulatorFork.sol";
-import {TokenPool} from "@ccip/contracts/src/v0.8/ccip/pools/TokenPool.sol";
-import {RegistryModuleOwnerCustom} from "@ccip/contracts/src/v0.8/ccip/tokenAdminRegistry/RegistryModuleOwnerCustom.sol";
-import {TokenAdminRegistry} from "@ccip/contracts/src/v0.8/ccip/tokenAdminRegistry/TokenAdminRegistry.sol";
-import {RateLimiter} from "@ccip/contracts/src/v0.8/ccip/libraries/RateLimiter.sol";
-import {IERC20} from "@ccip/contracts/src/v0.8/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
-import {IRouterClient} from "@ccip/contracts/src/v0.8/ccip/interfaces/IRouterClient.sol";
-import {Client} from "@ccip/contracts/src/v0.8/ccip/libraries/Client.sol";
+import {console, Test} from "forge-std/Test.sol";
 
 import {SourceRebaseToken} from "../src/SourceRebaseToken.sol";
-import {DestRebaseToken} from "../src/DestRebaseToken.sol";
-
-import {SourcePool} from "../src/SourcePool.sol";
-import {DestPool} from "../src/DestPool.sol";
-
 import {Vault} from "../src/Vault.sol";
+
 import {IRebaseToken} from "../src/interfaces/IRebaseToken.sol";
 
 contract RebaseTokenTest is Test {
-    CCIPLocalSimulatorFork public ccipLocalSimulatorFork;
+    SourceRebaseToken public rebaseToken;
+    Vault public vault;
+    address public sourcePool; // don't really need this in this test but it's fine
 
-    uint256 arbSepoliaFork;
-    uint256 zksyncSepoliaFork;
+    address public user = makeAddr("user");
+    address public owner = makeAddr("owner");
+    uint256 public SEND_VALUE = 1e5;
 
-    DestRebaseToken destRebaseToken;
-    SourceRebaseToken sourceRebaseToken;
-
-    DestPool destPool;
-    SourcePool sourcePool;
-
-    TokenAdminRegistry tokenAdminRegistryArbSepolia;
-    TokenAdminRegistry tokenAdminRegistryZksyncSepolia;
-
-    Register.NetworkDetails arbSepoliaNetworkDetails;
-    Register.NetworkDetails zksyncSepoliaNetworkDetails;
-
-    RegistryModuleOwnerCustom registryModuleOwnerCustomArbSepolia;
-    RegistryModuleOwnerCustom registryModuleOwnerCustomZksyncSepolia;
-
-    Vault vault;
+    function addRewardsToVault(uint256 amount) public {
+        // send some rewards to the vault using the receive function
+        payable(address(vault)).transfer(amount);
+    }
 
     function setUp() public {
-        address[] memory allowlist = new address[](0);
-
-        // 1. Setup the Arbitrum and ZKsync forks
-        arbSepoliaFork = vm.createSelectFork("arb");
-        zksyncSepoliaFork = vm.createFork("zksync");
-
-        //NOTE: what does this do?
-        ccipLocalSimulatorFork = new CCIPLocalSimulatorFork();
-        vm.makePersistent(address(ccipLocalSimulatorFork));
-
-        // 2. Deploy and configure on the source chain: Arbitrum
-        // 2. a) Deploy the token contract on Arbitrum
-        sourceRebaseToken = new SourceRebaseToken();
-        // 2. b) Deploy the pool contract on Arbitrum
-        arbSepoliaNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
-        sourcePool = new SourcePool(
-            IERC20(address(sourceRebaseToken)),
-            allowlist,
-            arbSepoliaNetworkDetails.rmnProxyAddress,
-            arbSepoliaNetworkDetails.routerAddress
-        );
-        // 2. c) Deploy the vault on Arbitrum
-        vault = new Vault(IRebaseToken(address(sourceRebaseToken)));
-        // 2. d) configure the token
-        sourceRebaseToken.setVaultAndPool(address(sourcePool), address(vault));
-        // 2. e) Claim role on Arbitrum
-        tokenAdminRegistryArbSepolia = TokenAdminRegistry(arbSepoliaNetworkDetails.tokenAdminRegistryAddress);
-        tokenAdminRegistryArbSepolia.acceptAdminRole(address(sourceRebaseToken));
-        // 2. f) Accept role on Arbitrum
-        registryModuleOwnerCustomArbSepolia =
-            RegistryModuleOwnerCustom(arbSepoliaNetworkDetails.registryModuleOwnerCustomAddress);
-        registryModuleOwnerCustomArbSepolia.registerAdminViaOwner(address(sourceRebaseToken));
-        // 2. g) Link token to pool in the token admin registry
-        tokenAdminRegistryArbSepolia.setPool(address(sourceRebaseToken), address(sourcePool));
-
-        // 3. Deploy and configure on the destination chain: Zksync
-        // Deploy the token contract on ZKsync
-        vm.selectFork(zksyncSepoliaFork);
-        destRebaseToken = new DestRebaseToken();
-        // Deploy the token pool on ZKsync
-        zksyncSepoliaNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
-        destPool = new DestPool(
-            IERC20(address(destRebaseToken)),
-            allowlist,
-            zksyncSepoliaNetworkDetails.rmnProxyAddress,
-            zksyncSepoliaNetworkDetails.routerAddress
-        );
-        // Claim role on Zksync
-        registryModuleOwnerCustomZksyncSepolia =
-            RegistryModuleOwnerCustom(zksyncSepoliaNetworkDetails.registryModuleOwnerCustomAddress);
-        registryModuleOwnerCustomZksyncSepolia.registerAdminViaOwner(address(destRebaseToken));
-        // Accept role on Zksync
-        tokenAdminRegistryZksyncSepolia = TokenAdminRegistry(zksyncSepoliaNetworkDetails.tokenAdminRegistryAddress);
-        tokenAdminRegistryZksyncSepolia.acceptAdminRole(address(destRebaseToken));
-        // Link token to pool in the token admin registry
-        tokenAdminRegistryZksyncSepolia.setPool(address(destRebaseToken), address(destPool));
+        vm.startPrank(owner);
+        rebaseToken = new SourceRebaseToken();
+        vault = new Vault(IRebaseToken(address(rebaseToken)));
+        sourcePool = makeAddr("pool");
+        rebaseToken.setVaultAndPool(address(vault), address(sourcePool));
+        vm.stopPrank();
     }
 
-    function testConfigureTokenPoolArb() public {
-        // NOTE: remove?
-        vm.selectFork(arbSepoliaFork);
-        TokenPool.ChainUpdate[] memory chains = new TokenPool.ChainUpdate[](1);
-        chains = new TokenPool.ChainUpdate[](1);
-        chains[0] = TokenPool.ChainUpdate({
-            remoteChainSelector: arbSepoliaNetworkDetails.chainSelector,
-            allowed: true,
-            remotePoolAddress: abi.encode(address(destPool)),
-            remoteTokenAddress: abi.encode(address(destRebaseToken)),
-            outboundRateLimiterConfig: RateLimiter.Config({isEnabled: true, capacity: 100_000, rate: 167}),
-            inboundRateLimiterConfig: RateLimiter.Config({isEnabled: true, capacity: 100_000, rate: 167})
-        });
-        sourcePool.applyChainUpdates(chains);
+    function testDeposit() public {
+        // Deposit funds
+        vm.startPrank(user);
+        vm.deal(user, SEND_VALUE);
+        vault.deposit{value: SEND_VALUE}();
+
+        console.log("block number: %d", block.number);
+        console.log("block timestamp: %d", block.timestamp);
+        uint256 startBalance = rebaseToken.balanceOf(user);
+        console.log("User start balance: %d", startBalance);
+        assertEq(startBalance, SEND_VALUE);
+
+        // check the balance has increased after some time has passed
+        vm.warp(101);
+        vm.roll(101);
+
+        console.log("block number: %d", block.number);
+        console.log("block timestamp: %d", block.timestamp);
+        uint256 middleBalance = rebaseToken.balanceOf(user);
+        console.log("User middle balance: %d", middleBalance);
+
+        assertGt(middleBalance, startBalance);
+
+        // check the balance has increased after some time has passed
+        vm.warp(201);
+        vm.roll(201);
+
+        console.log("block number: %d", block.number);
+        console.log("block timestamp: %d", block.timestamp);
+        uint256 endBalance = rebaseToken.balanceOf(user);
+        console.log("User end balance: %d", endBalance);
+
+        assertGt(endBalance, middleBalance);
+
+        uint256 differenceOne = middleBalance - startBalance;
+        uint256 differenceTwo = endBalance - middleBalance;
+
+        assertEq(differenceTwo, differenceOne);
+        vm.stopPrank();
     }
 
-    function testConfigureTokenPoolZksync() public {
-        // NOTE: remove?
-        vm.selectFork(zksyncSepoliaFork);
-        TokenPool.ChainUpdate[] memory chains = new TokenPool.ChainUpdate[](1);
-        chains = new TokenPool.ChainUpdate[](1);
-        chains[0] = TokenPool.ChainUpdate({
-            remoteChainSelector: zksyncSepoliaNetworkDetails.chainSelector,
-            allowed: true,
-            remotePoolAddress: abi.encode(address(sourcePool)),
-            remoteTokenAddress: abi.encode(address(sourceRebaseToken)),
-            outboundRateLimiterConfig: RateLimiter.Config({isEnabled: true, capacity: 100_000, rate: 167}),
-            inboundRateLimiterConfig: RateLimiter.Config({isEnabled: true, capacity: 100_000, rate: 167})
-        });
-        destPool.applyChainUpdates(chains);
+    function testRedeemStraightAway() public {
+        // Deposit funds
+        vm.startPrank(user);
+        vm.deal(user, SEND_VALUE);
+        vault.deposit{value: SEND_VALUE}();
+
+        // Redeem funds
+        vault.redeem(SEND_VALUE);
+
+        uint256 balance = rebaseToken.balanceOf(user);
+        console.log("User balance: %d", balance);
+        assertEq(balance, 0);
+        vm.stopPrank();
+    }
+
+    function testRedeemAfterTimeHasPassed() public {
+        // Deposit funds
+        vm.deal(user, SEND_VALUE);
+        vm.prank(user);
+        vault.deposit{value: SEND_VALUE}();
+
+        // check the balance has increased after some time has passed
+        vm.warp(101);
+        vm.roll(101);
+
+        // Add rewards to the vault
+        vm.deal(owner, 1 ether);
+        vm.prank(owner);
+        addRewardsToVault(1 ether);
+
+        // Redeem funds
+        uint256 balance = rebaseToken.balanceOf(user);
+        vm.prank(user);
+        vault.redeem(balance);
+
+        uint256 ethBalance = address(user).balance;
+
+        assertEq(balance, ethBalance);
+    }
+
+    function testGetUserIndex() public {
+        // Deposit funds
+        vm.startPrank(user);
+        vm.deal(user, SEND_VALUE);
+        vault.deposit{value: SEND_VALUE}();
+        // Get user index
+        uint256 userIndex = rebaseToken.userIndexes(user);
+        console.log("User index: %d", userIndex);
+        assertEq(userIndex, 1e27);
+        vm.stopPrank();
+    }
+
+    function testCannotDepositMoreThanMax() public {
+        // Deposit funds
+        vm.startPrank(user);
+        vm.deal(user, 1e6);
+        vm.expectRevert();
+        vault.deposit{value: 1e6}();
+        vm.stopPrank();
+    }
+
+    function testCannotCallMint() public {
+        // Deposit funds
+        vm.startPrank(user);
+        vm.expectRevert();
+        rebaseToken.mint(user, SEND_VALUE);
+        vm.stopPrank();
+    }
+
+    function testCannotCallBurn() public {
+        // Deposit funds
+        vm.startPrank(user);
+        vm.expectRevert();
+        rebaseToken.burn(user, SEND_VALUE);
+        vm.stopPrank();
+    }
+
+    function testCannotWithdrawMoreThanBalance() public {
+        // Deposit funds
+        vm.startPrank(user);
+        vm.deal(user, SEND_VALUE);
+        vault.deposit{value: SEND_VALUE}();
+        vm.expectRevert();
+        vault.redeem(SEND_VALUE + 1);
+        vm.stopPrank();
+    }
+
+    function testCannotBurnZero() public {
+        // Deposit funds
+        vm.startPrank(user);
+        vm.expectRevert();
+        vault.redeem(0);
+        vm.stopPrank();
     }
 }

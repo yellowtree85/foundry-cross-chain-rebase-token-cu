@@ -29,7 +29,7 @@ contract RebaseTokenBase is ERC20, Ownable {
     event Burn(address indexed user, uint256 amount, uint256 balance, uint256 index);
 
     error RebaseToken__AmountGreaterThanBalance(uint256 amount, uint256 balance);
-    error RebaseToken__SenderNotPool(address sender);
+    error RebaseToken__SenderNotPool(address pool, address sender);
     error RebaseToken__CannotTransferZero();
 
     constructor() Ownable(msg.sender) ERC20("RebaseToken", "RBT") {
@@ -38,63 +38,9 @@ contract RebaseTokenBase is ERC20, Ownable {
 
     modifier onlyPool() {
         if (msg.sender != s_pool) {
-            revert RebaseToken__SenderNotPool(msg.sender);
+            revert RebaseToken__SenderNotPool(s_pool, msg.sender);
         }
         _;
-    }
-
-    function getUserInfo(address user) external view returns (uint256, uint256, uint256) {
-        return (userIndexes[user], s_accumulatedRate, s_lastUpdatedTimestamp);
-    }
-
-    /// @notice Mints new tokens for a given address.
-    /// @param account The address to mint the new tokens to.
-    /// @param amount The number of tokens to be minted.
-    /// @dev this function increases the total supply.
-    function mint(address account, uint256 amount) external onlyPool {
-        if (amount == 0) {
-            revert RebaseToken__CannotTransferZero();
-        }
-
-        // accumulates the balance of the user
-        (, uint256 currentBalance, uint256 balanceIncrease, uint256 index) = _applyAccruedInterest(account);
-
-        // mints tokens equivalent to the amount requested
-        // events are emitted in the internal function
-        _mint(account, amount);
-
-        emit Mint(account, amount, currentBalance + amount, index);
-    }
-
-    /// @notice Burns tokens from the sender.
-    /// @param amount The number of tokens to be burned.
-    /// @dev this function decreases the total supply.
-    function burn(address account, uint256 amount) external onlyPool {
-        if (amount == 0) {
-            revert RebaseToken__CannotTransferZero();
-        }
-
-        // accumulates the balance of the user
-        (, uint256 currentBalance, uint256 balanceIncrease, uint256 index) = _applyAccruedInterest(account);
-
-        //if amount is equal to uint(-1), the user wants to redeem everything
-        if (amount == UINT_MAX_VALUE) {
-            amount = currentBalance;
-        }
-
-        if (amount > currentBalance) {
-            revert RebaseToken__AmountGreaterThanBalance(amount, currentBalance);
-        }
-
-        // burns tokens equivalent to the amount requested
-        _burn(account, amount);
-
-        //reset the user data if the remaining balance is 0
-        if (currentBalance - amount == 0) {
-            userIndexes[account] = 0;
-        }
-
-        emit Burn(account, amount, currentBalance - amount, index);
     }
 
     /**
@@ -150,6 +96,10 @@ contract RebaseTokenBase is ERC20, Ownable {
      */
     function getUserIndex(address _user) external view returns (uint256) {
         return userIndexes[_user];
+    }
+
+    function getPool() external view returns (address) {
+        return s_pool;
     }
 
     /**

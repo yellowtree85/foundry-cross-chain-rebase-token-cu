@@ -16,8 +16,8 @@ contract BridgeTokens is Script {
         address ccipRouterAddress
     ) public {
         // NOTE: what can I do instead of this by making it interactive? Do I even need this line if I'm using a wallet for this?
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        vm.startBroadcast(deployerPrivateKey);
+        //uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        vm.startBroadcast();
 
         Client.EVMTokenAmount[] memory tokenToSendDetails = new Client.EVMTokenAmount[](1);
         Client.EVMTokenAmount memory tokenAmount =

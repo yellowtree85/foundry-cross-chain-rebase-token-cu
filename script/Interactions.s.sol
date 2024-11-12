@@ -6,11 +6,11 @@ import {IRebaseToken} from "../src/interfaces/IRebaseToken.sol";
 import {Vault} from "../src/Vault.sol";
 
 contract Deposit is Script {
-    uint256 public SEND_VAULE = 0.1 ether;
+    uint256 public SEND_VALUE = 0.1 ether;
 
     function depositFunds(address vault) public {
         // Deposit to the vault
-        Vault(payable(vault)).deposit{value: SEND_VAULE}();
+        Vault(payable(vault)).deposit{value: SEND_VALUE}();
     }
 
     function run(address vault) external {

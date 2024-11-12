@@ -12,10 +12,6 @@ contract SourcePool is TokenPool {
         TokenPool(token, allowlist, rmnProxy, router)
     {}
 
-    function _burn(address account, uint256 amount) internal virtual {
-        IRebaseToken(address(i_token)).burn(account, amount);
-    }
-
     function lockOrBurn(Pool.LockOrBurnInV1 calldata lockOrBurnIn)
         external
         virtual
@@ -27,20 +23,17 @@ contract SourcePool is TokenPool {
         address receiver = abi.decode(lockOrBurnIn.receiver, (address));
         uint256 amount = lockOrBurnIn.amount;
 
-        _burn(receiver, amount);
+        IRebaseToken(address(i_token)).burn(address(this), amount);
 
         // NOTE: convert to underlying and bridge the corresponding eligible/pending amounts (if applicable)
 
         // get the necessary info
-        (uint256 newUserIndex, uint256 currentAccumulatedRate, uint256 lastTimestamp) =
-            IRebaseToken(address(i_token)).getUserInfo(receiver);
+        (uint256 newUserIndex) = IRebaseToken(address(i_token)).getUserIndex(receiver);
 
         // encode a function call to pass the caller's info to the destination pool and update it
         return Pool.LockOrBurnOutV1({
             destTokenAddress: getRemoteToken(lockOrBurnIn.remoteChainSelector),
-            destPoolData: abi.encodeWithSelector(
-                IRebaseToken.setUserInfo.selector, receiver, newUserIndex, currentAccumulatedRate, lastTimestamp
-            )
+            destPoolData: abi.encode(newUserIndex)
         });
     }
 

@@ -7,16 +7,12 @@ import {RegistryModuleOwnerCustom} from "@ccip/contracts/src/v0.8/ccip/tokenAdmi
 import {TokenAdminRegistry} from "@ccip/contracts/src/v0.8/ccip/tokenAdminRegistry/TokenAdminRegistry.sol";
 import {IERC20} from "@ccip/contracts/src/v0.8/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
 
-import {SourceRebaseToken} from "../src/SourceRebaseToken.sol";
-import {IRebaseToken} from "../src/interfaces/IRebaseToken.sol";
-import {SourcePool} from "../src/SourcePool.sol";
-import {Vault} from "../src/Vault.sol";
+import {DestRebaseToken} from "../src/DestRebaseToken.sol";
+import {DestPool} from "../src/DestPool.sol";
 
-contract SourceDeployer is Script {
+contract DestDeployer is Script {
     CCIPLocalSimulatorFork public ccipLocalSimulatorFork;
     Register.NetworkDetails networkDetails;
-
-    SourceRebaseToken public token;
 
     RegistryModuleOwnerCustom registryModuleOwnerCustom;
     TokenAdminRegistry tokenAdminRegistry;
@@ -29,33 +25,31 @@ contract SourceDeployer is Script {
         tokenAdminRegistry = TokenAdminRegistry(networkDetails.tokenAdminRegistryAddress);
     }
 
-    function run() public {
+    function run() public returns (DestRebaseToken destToken, DestPool destPool) {
         // NOTE: what can I do instead of this by making it interactive? Do I even need this line if I'm using a wallet for this?
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        vm.startBroadcast(deployerPrivateKey);
+        //uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        vm.startBroadcast();
 
         // Step 1) Deploy token
-        token = new SourceRebaseToken();
+        destToken = new DestRebaseToken();
 
-        // Step 2) Deploy SourcePool
+        // Step 2) Deploy pool
         address[] memory allowlist = new address[](0);
-        SourcePool sourcePool = new SourcePool(
-            IERC20(address(token)), allowlist, networkDetails.rmnProxyAddress, networkDetails.routerAddress
+        destPool = new DestPool(
+            IERC20(address(destToken)), allowlist, networkDetails.rmnProxyAddress, networkDetails.routerAddress
         );
 
-        Vault vault = new Vault(IRebaseToken(address(token)));
-
-        // Step 3) set the vault and pool for the token
-        token.setVaultAndPool(address(sourcePool), address(vault));
+        // Step 3) set pool on the token contract for permissions
+        destToken.setPool(address(destPool));
 
         // Step 4) Claim Admin role
-        registryModuleOwnerCustom.registerAdminViaOwner(address(token));
+        registryModuleOwnerCustom.registerAdminViaOwner(address(destToken));
 
         // Step 5) Accept Admin role
-        tokenAdminRegistry.acceptAdminRole(address(token));
+        tokenAdminRegistry.acceptAdminRole(address(destToken));
 
-        // Step 6) Link token to pool
-        tokenAdminRegistry.setPool(address(token), address(sourcePool));
+        // Step 6) Link token to pool in the token admin registry
+        tokenAdminRegistry.setPool(address(destToken), address(destPool));
 
         vm.stopBroadcast();
     }

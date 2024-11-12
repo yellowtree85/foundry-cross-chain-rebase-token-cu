@@ -18,7 +18,7 @@ contract DestPool is TokenPool {
     function lockOrBurn(Pool.LockOrBurnInV1 calldata lockOrBurnIn) external returns (Pool.LockOrBurnOutV1 memory) {
         _validateLockOrBurn(lockOrBurnIn);
 
-        IRebaseToken(address(i_token)).burn(abi.decode(lockOrBurnIn.receiver, (address)), lockOrBurnIn.amount);
+        IRebaseToken(address(i_token)).burn(address(this), lockOrBurnIn.amount);
 
         return
             Pool.LockOrBurnOutV1({destTokenAddress: getRemoteToken(lockOrBurnIn.remoteChainSelector), destPoolData: ""});
@@ -30,15 +30,13 @@ contract DestPool is TokenPool {
         returns (Pool.ReleaseOrMintOutV1 memory)
     {
         _validateReleaseOrMint(releaseOrMintIn);
-
+        address receiver = releaseOrMintIn.receiver;
         // Mint rebasing tokens to the receiver on the destination chain (this also performs the base update logic in case there are already pending deposits that need to be made eligible, so do it before encoded call to setUserDepositInfo below)
-        IRebaseToken(address(i_token)).mint(releaseOrMintIn.receiver, releaseOrMintIn.amount);
+        IRebaseToken(address(i_token)).mint(receiver, releaseOrMintIn.amount);
 
-        // call the destination token contract to update the share to token ratio
-        /* solhint-disable avoid-low-level-calls */
-        (bool success, bytes memory returnData) = address(i_token).call(releaseOrMintIn.sourcePoolData);
-        if (!success) revert CallToTokenFailed();
-        if (returnData.length > 0) revert NoReturnDataExpected();
+        uint256 userIndex = abi.decode(releaseOrMintIn.sourcePoolData, (uint256));
+        // call the destination token contract to update the user index
+        IRebaseToken(address(i_token)).setUserIndex(receiver, userIndex);
 
         return Pool.ReleaseOrMintOutV1({destinationAmount: releaseOrMintIn.amount});
     }

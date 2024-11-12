@@ -19,8 +19,8 @@ contract ConfigurePoolScript is Script {
         uint128 inboundRateLimiterRate
     ) public {
         // NOTE: what can I do instead of this by making it interactive? Do I even need this line if I'm using a wallet for this?
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        vm.startBroadcast(deployerPrivateKey);
+        //uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        vm.startBroadcast();
 
         TokenPool tokenPool = TokenPool(ccipChainPoolAddress);
 

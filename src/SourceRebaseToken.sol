@@ -49,13 +49,11 @@ contract SourceRebaseToken is RebaseTokenBase {
         }
 
         // accumulates the balance of the user
-        (, uint256 currentBalance, uint256 balanceIncrease, uint256 index) = _applyAccruedInterest(account);
+        _beforeUpdate(address(0), account, amount);
 
         // mints tokens equivalent to the amount requested
         // events are emitted in the internal function
         _mint(account, amount);
-
-        emit Mint(account, amount, currentBalance + amount, index);
     }
 
     /// @notice Burns tokens from the sender.
@@ -66,17 +64,7 @@ contract SourceRebaseToken is RebaseTokenBase {
             revert RebaseToken__CannotTransferZero();
         }
 
-        // accumulates the balance of the user
-        (, uint256 currentBalance, uint256 balanceIncrease, uint256 index) = _applyAccruedInterest(account);
-
-        //if amount is equal to uint(-1), the user wants to redeem everything
-        if (amount == UINT_MAX_VALUE) {
-            amount = currentBalance;
-        }
-
-        if (amount > currentBalance) {
-            revert RebaseToken__AmountGreaterThanBalance(amount, currentBalance);
-        }
+        _beforeUpdate(account, address(0), amount);
 
         // burns tokens equivalent to the amount requested
         _burn(account, amount);

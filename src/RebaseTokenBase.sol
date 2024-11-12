@@ -16,15 +16,6 @@ contract RebaseTokenBase is ERC20, Ownable {
     mapping(address => uint256) public userIndexes; // NOTE: spelling, do I change to interestGained
 
     event CumulativeIndexUpdated(uint256 index, uint256 timestamp);
-    event BalanceTransfer(
-        address indexed from,
-        address indexed to,
-        uint256 amount,
-        uint256 fromBalanceIncrease,
-        uint256 toBalanceIncrease,
-        uint256 fromIndex,
-        uint256 toIndex
-    );
     event Mint(address indexed user, uint256 amount, uint256 balance, uint256 index);
     event Burn(address indexed user, uint256 amount, uint256 balance, uint256 index);
 
@@ -142,15 +133,12 @@ contract RebaseTokenBase is ERC20, Ownable {
 
     function transfer(address recipient, uint256 amount) public override returns (bool) {
         _internalTransfer(msg.sender, recipient, amount);
-        return true;
+        return super.transfer(recipient, amount);
     }
 
     function transferFrom(address sender, address recipient, uint256 amount) public override returns (bool) {
-        // NOTE: check allowances here
-        address spender = msg.sender;
-        _spendAllowance(sender, spender, amount);
         _internalTransfer(sender, recipient, amount);
-        return true;
+        return super.transferFrom(sender, recipient, amount);
     }
 
     /**
@@ -161,26 +149,20 @@ contract RebaseTokenBase is ERC20, Ownable {
      * @param _value the amount to transfer
      *
      */
-    function _internalTransfer(address _from, address _to, uint256 _value) internal {
-        if (_value <= 0) {
+    function _beforeUpdate(address _from, address _to, uint256 _value) internal {
+        if (_from != address(0)) {
+            // we are burning or transferring tokens
+            (uint256 fromPreviousBalance, uint256 fromBalance, uint256 fromBalanceIncrease, uint256 fromIndex) =
+                _applyAccruedInterest(_from);
+            if (fromBalance - _value == 0) {
+                userIndexes[_from] = 0;
+            }
+        }
+        if (_to != address(0)) {
+            // we are minting or transferring tokens
+            (uint256 toPreviousBalance, uint256 toBalance, uint256 toBalanceIncrease, uint256 toIndex) =
+                _applyAccruedInterest(_to);
             revert RebaseToken__CannotTransferZero();
         }
-
-        //cumulate the balance of the sender
-        (, uint256 fromBalance, uint256 fromBalanceIncrease, uint256 fromIndex) = _applyAccruedInterest(_from);
-
-        //cumulate the balance of the receiver
-        (,, uint256 toBalanceIncrease, uint256 toIndex) = _applyAccruedInterest(_to);
-
-        //performs the transfer
-        super._transfer(_from, _to, _value);
-
-        // NOTE: update as above
-        //reset the user data if the remaining balance is 0
-        if (fromBalance - _value == 0) {
-            userIndexes[_from] = 0;
-        }
-
-        emit BalanceTransfer(_from, _to, _value, fromBalanceIncrease, toBalanceIncrease, fromIndex, toIndex);
     }
 }

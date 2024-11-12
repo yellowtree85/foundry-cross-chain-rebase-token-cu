@@ -29,48 +29,19 @@ contract DestRebaseToken is RebaseTokenBase {
     /// @param amount The number of tokens to be minted.
     /// @dev this function increases the total supply.
     function mint(address account, uint256 amount) external onlyPool {
-        if (amount == 0) {
-            revert RebaseToken__CannotTransferZero();
-        }
-
+        // NOTE: should I have a check for zero?
         // accumulates the balance of the user
-        (, uint256 currentBalance, uint256 balanceIncrease, uint256 index) = _applyAccruedInterest(account);
-
-        // mints tokens equivalent to the amount requested
-        // events are emitted in the internal function
+        _beforeUpdate(address(0), account, amount);
         _mint(account, amount);
-
-        emit Mint(account, amount, currentBalance + amount, index);
     }
 
     /// @notice Burns tokens from the sender.
     /// @param amount The number of tokens to be burned.
     /// @dev this function decreases the total supply.
     function burn(address account, uint256 amount) external onlyPool {
-        if (amount == 0) {
-            revert RebaseToken__CannotTransferZero();
-        }
-
+        // NOTE: should I have a check for zero?
         // accumulates the balance of the user
-        (, uint256 currentBalance, uint256 balanceIncrease, uint256 index) = _applyAccruedInterest(account);
-
-        //if amount is equal to uint(-1), the user wants to redeem everything
-        if (amount == UINT_MAX_VALUE) {
-            amount = currentBalance;
-        }
-
-        if (amount > currentBalance) {
-            revert RebaseToken__AmountGreaterThanBalance(amount, currentBalance);
-        }
-
-        // burns tokens equivalent to the amount requested
+        _beforeUpdate(account, address(0), amount);
         _burn(account, amount);
-
-        //reset the user data if the remaining balance is 0
-        if (currentBalance - amount == 0) {
-            userIndexes[account] = 0;
-        }
-
-        emit Burn(account, amount, currentBalance - amount, index);
     }
 }

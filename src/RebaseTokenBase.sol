@@ -132,12 +132,12 @@ contract RebaseTokenBase is ERC20, Ownable {
     }
 
     function transfer(address recipient, uint256 amount) public override returns (bool) {
-        _internalTransfer(msg.sender, recipient, amount);
+        _beforeUpdate(msg.sender, recipient, amount);
         return super.transfer(recipient, amount);
     }
 
     function transferFrom(address sender, address recipient, uint256 amount) public override returns (bool) {
-        _internalTransfer(sender, recipient, amount);
+        _beforeUpdate(sender, recipient, amount);
         return super.transferFrom(sender, recipient, amount);
     }
 
@@ -162,7 +162,6 @@ contract RebaseTokenBase is ERC20, Ownable {
             // we are minting or transferring tokens
             (uint256 toPreviousBalance, uint256 toBalance, uint256 toBalanceIncrease, uint256 toIndex) =
                 _applyAccruedInterest(_to);
-            revert RebaseToken__CannotTransferZero();
         }
     }
 }

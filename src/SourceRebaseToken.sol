@@ -44,15 +44,8 @@ contract SourceRebaseToken is RebaseTokenBase {
     /// @param amount The number of tokens to be minted.
     /// @dev this function increases the total supply.
     function mint(address account, uint256 amount) external onlyPoolOrVault {
-        if (amount == 0) {
-            revert RebaseToken__CannotTransferZero();
-        }
-
         // accumulates the balance of the user
         _beforeUpdate(address(0), account, amount);
-
-        // mints tokens equivalent to the amount requested
-        // events are emitted in the internal function
         _mint(account, amount);
     }
 
@@ -60,21 +53,10 @@ contract SourceRebaseToken is RebaseTokenBase {
     /// @param amount The number of tokens to be burned.
     /// @dev this function decreases the total supply.
     function burn(address account, uint256 amount) external onlyPoolOrVault {
-        if (amount == 0) {
-            revert RebaseToken__CannotTransferZero();
-        }
-
+        // NOTE: should I have a check for zero?
+        // accumulates the balance of the user
         _beforeUpdate(account, address(0), amount);
-
-        // burns tokens equivalent to the amount requested
         _burn(account, amount);
-
-        //reset the user data if the remaining balance is 0
-        if (currentBalance - amount == 0) {
-            userIndexes[account] = 0;
-        }
-
-        emit Burn(account, amount, currentBalance - amount, index);
     }
 
     // /**

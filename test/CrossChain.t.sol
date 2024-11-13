@@ -24,6 +24,11 @@ import {IRebaseToken} from "../src/interfaces/IRebaseToken.sol";
 import {SourceDeployer} from "../script/Deployer.s.sol";
 import {BridgeTokens} from "../script/BridgeTokens.s.sol";
 
+// Tests to include
+// Test you can bridge tokens - check the balance is correct
+// test you can bridge a portion of tokens - check balances are correct
+// test you can bridge and then bridge back all balance - check balances
+// test you can bridge and then bridge back a portion - check balances
 contract CrossChainTest is Test {
     address public owner = makeAddr("owner");
     CCIPLocalSimulatorFork public ccipLocalSimulatorFork;
@@ -80,13 +85,15 @@ contract CrossChainTest is Test {
         //sepoliaNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
         //(sourceRebaseToken, sourcePool, vault) = sourceDeployer.run(owner);
 
+        // Deploy the token pool on ZKsync
+
+        sepoliaNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
         vm.startPrank(owner);
-        sourceRebaseToken = new SourceRebaseToken();
+        sourceRebaseToken =
+            new SourceRebaseToken(sepoliaNetworkDetails.linkAddress, sepoliaNetworkDetails.routerAddress);
         console.log("source rebase token address");
         console.log(address(sourceRebaseToken));
-        // Deploy the token pool on ZKsync
         console.log("Deploying token pool on Sepolia");
-        sepoliaNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
         sourcePool = new SourcePool(
             IERC20(address(sourceRebaseToken)),
             allowlist,

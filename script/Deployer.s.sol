@@ -43,7 +43,7 @@ contract SourceDeployer is Script {
         vm.startBroadcast(owner);
 
         // Step 1) Deploy token
-        sourceToken = new SourceRebaseToken();
+        sourceToken = new SourceRebaseToken(networkDetails.linkAddress, networkDetails.routerAddress);
 
         // Step 2) Deploy SourcePool
         address[] memory allowlist = new address[](0);

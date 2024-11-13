@@ -6,22 +6,19 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 // NOTE: name, symbol, decimals need to be included
 contract RebaseTokenBase is ERC20, Ownable {
-    uint256 public constant UINT_MAX_VALUE = type(uint256).max; //NOTE: how can I not use this? where is it used?
     uint256 constant PRECISION_FACTOR = 10 ** 27; // Used to handle fixed-point calculations
-    uint256 public s_interestRate = 5 * PRECISION_FACTOR / 1000;
-    uint256 public s_accumulatedRate = PRECISION_FACTOR; // Initial rate of 1 (no growth)
-    uint256 public s_lastUpdatedTimestamp;
-    address public s_pool;
+    uint256 public s_interestRate = 5e5; // teeny tiny
+    //Initial rate of 1 * precision AKA no growth
+    uint256 public s_accumulatedInterest = PRECISION_FACTOR; // The amount of interest that has accumulated UP TO when s_interestRate was last updated.
+    uint256 public s_lastUpdatedTimestamp; // the time when s_interestrate and s_accumulatedInterest were last updated
+    address public s_pool; // the pool address (needed for access modifiers)
 
     mapping(address => uint256) public userIndexes; // NOTE: spelling, do I change to interestGained
 
-    event CumulativeIndexUpdated(uint256 index, uint256 timestamp);
-    event Mint(address indexed user, uint256 amount, uint256 balance, uint256 index);
-    event Burn(address indexed user, uint256 amount, uint256 balance, uint256 index);
+    event ToInterestAccrued(address user, uint256 balance);
+    event FromInterestAccrued(address user, uint256 balance);
 
-    error RebaseToken__AmountGreaterThanBalance(uint256 amount, uint256 balance);
     error RebaseToken__SenderNotPool(address pool, address sender);
-    error RebaseToken__CannotTransferZero();
 
     constructor() Ownable(msg.sender) ERC20("RebaseToken", "RBT") {
         s_lastUpdatedTimestamp = block.timestamp;
@@ -32,6 +29,20 @@ contract RebaseTokenBase is ERC20, Ownable {
             revert RebaseToken__SenderNotPool(s_pool, msg.sender);
         }
         _;
+    }
+
+    /**
+     * @dev returns the last index of the user, used to calculate the balance of the user
+     * @param _user address of the user
+     * @return the last user index
+     *
+     */
+    function getUserIndex(address _user) external view returns (uint256) {
+        return userIndexes[_user];
+    }
+
+    function getPool() external view returns (address) {
+        return s_pool;
     }
 
     /**
@@ -48,7 +59,7 @@ contract RebaseTokenBase is ERC20, Ownable {
             return 0;
         }
         // shares * current accumulated interest / interest when they deposited (or interest was minted to them)
-        return currentPrincipalBalance * _calculateAccumulatedInterest() / userIndexes[_user];
+        return currentPrincipalBalance * _calculateAccumulatedInterestSinceLastUpdate() / userIndexes[_user];
     }
 
     /**
@@ -76,59 +87,7 @@ contract RebaseTokenBase is ERC20, Ownable {
             return 0;
         }
 
-        return currentSupplyPrincipal * _calculateAccumulatedInterest();
-    }
-
-    /**
-     * @dev returns the last index of the user, used to calculate the balance of the user
-     * @param _user address of the user
-     * @return the last user index
-     *
-     */
-    function getUserIndex(address _user) external view returns (uint256) {
-        return userIndexes[_user];
-    }
-
-    function getPool() external view returns (address) {
-        return s_pool;
-    }
-
-    /**
-     * @dev accumulates the accrued interest of the user to the principal balance
-     * @param _user the address of the user for which the interest is being accumulated
-     * @return the previous principal balance, the new principal balance, the balance increase
-     * and the new user index
-     *
-     */
-    function _applyAccruedInterest(address _user) internal returns (uint256, uint256, uint256, uint256) {
-        //NOTE: DO they lose this is updateAccumlatedRate is called
-        //NOTE: make internal function / make it public
-        uint256 previousPrincipalBalance = super.balanceOf(_user);
-
-        // Calculate the accrued interest since the last accumulation
-        // `balanceOf` uses the accumulated rate to get the updated balance
-        uint256 currentBalance = balanceOf(_user);
-        uint256 balanceIncrease = currentBalance - previousPrincipalBalance;
-
-        // Mint an amount of tokens equivalent to the interest accrued
-        _mint(_user, balanceIncrease);
-
-        // Update the user's index to reflect the new state
-        userIndexes[_user] = _calculateAccumulatedInterest(); // NOTE: check this (is it an index or an amount)
-        return (previousPrincipalBalance, currentBalance, balanceIncrease, userIndexes[_user]);
-    }
-
-    /**
-     * @dev returns the normalized income of the rebase token
-     * @return the normalized income
-     *
-     */
-    function _calculateAccumulatedInterest() internal view returns (uint256) {
-        uint256 timeDifference = block.timestamp - s_lastUpdatedTimestamp;
-        // represents the linear growth over time = 1 + (interest rate * time)
-        uint256 linearInterest = s_interestRate * timeDifference + PRECISION_FACTOR;
-        // Calculate the total amount accumulated since the last update
-        return s_accumulatedRate * linearInterest / PRECISION_FACTOR;
+        return currentSupplyPrincipal * _calculateAccumulatedInterestSinceLastUpdate();
     }
 
     function transfer(address recipient, uint256 amount) public override returns (bool) {
@@ -152,16 +111,54 @@ contract RebaseTokenBase is ERC20, Ownable {
     function _beforeUpdate(address _from, address _to, uint256 _value) internal {
         if (_from != address(0)) {
             // we are burning or transferring tokens
-            (uint256 fromPreviousBalance, uint256 fromBalance, uint256 fromBalanceIncrease, uint256 fromIndex) =
-                _applyAccruedInterest(_from);
+            (, uint256 fromBalance,,) = _applyAccruedInterest(_from);
             if (fromBalance - _value == 0) {
                 userIndexes[_from] = 0;
             }
+            emit FromInterestAccrued(_from, fromBalance);
         }
         if (_to != address(0)) {
             // we are minting or transferring tokens
-            (uint256 toPreviousBalance, uint256 toBalance, uint256 toBalanceIncrease, uint256 toIndex) =
-                _applyAccruedInterest(_to);
+            (, uint256 toBalance,,) = _applyAccruedInterest(_to);
+            emit ToInterestAccrued(_to, toBalance);
         }
+    }
+
+    /**
+     * @dev returns the normalized income of the rebase token
+     * @return the normalized income
+     *
+     */
+    function _calculateAccumulatedInterestSinceLastUpdate() internal view returns (uint256) {
+        uint256 timeDifference = block.timestamp - s_lastUpdatedTimestamp;
+        // represents the linear growth over time = 1 + (interest rate * time)
+        uint256 linearInterest = s_interestRate * timeDifference + PRECISION_FACTOR;
+        // Calculate the total amount accumulated since the last update
+        return s_accumulatedInterest * linearInterest / PRECISION_FACTOR;
+    }
+
+    /**
+     * @dev accumulates the accrued interest of the user to the principal balance
+     * @param _user the address of the user for which the interest is being accumulated
+     * @return the previous principal balance, the new principal balance, the balance increase
+     * and the new user index
+     *
+     */
+    function _applyAccruedInterest(address _user) internal returns (uint256, uint256, uint256, uint256) {
+        //NOTE: DO they lose this is updateAccumlatedRate is called
+        //NOTE: make internal function / make it public
+        uint256 previousPrincipalBalance = super.balanceOf(_user);
+
+        // Calculate the accrued interest since the last accumulation
+        // `balanceOf` uses the accumulated rate to get the updated balance
+        uint256 currentBalance = balanceOf(_user);
+        uint256 balanceIncrease = currentBalance - previousPrincipalBalance;
+
+        // Mint an amount of tokens equivalent to the interest accrued
+        _mint(_user, balanceIncrease);
+
+        // Update the user's index to reflect the new state
+        userIndexes[_user] = _calculateAccumulatedInterestSinceLastUpdate(); // NOTE: check this (is it an index or an amount)
+        return (previousPrincipalBalance, currentBalance, balanceIncrease, userIndexes[_user]);
     }
 }

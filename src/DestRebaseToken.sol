@@ -10,6 +10,7 @@ import {RebaseTokenBase} from "./RebaseTokenBase.sol";
 contract DestRebaseToken is RebaseTokenBase {
     event UserInfoUpdated(address indexed user, uint256 index);
     event PoolSet(address pool);
+    event RatesUpdated(uint256 newAccumulatedRate, uint256 newInterestRate, uint256 newLastUpdatedTimestamp);
 
     constructor() RebaseTokenBase() {}
 
@@ -21,6 +22,13 @@ contract DestRebaseToken is RebaseTokenBase {
     function setUserIndex(address user, uint256 index) external onlyPool {
         userIndexes[user] = index;
         emit UserInfoUpdated(user, index);
+    }
+
+    function setRates(uint256 newAccumulatedRate, uint256 newInterestRate) external onlyPool {
+        s_accumulatedInterest = newAccumulatedRate;
+        s_interestRate = newInterestRate;
+        s_lastUpdatedTimestamp = block.timestamp;
+        emit RatesUpdated(newAccumulatedRate, newInterestRate, block.timestamp);
     }
 
     // NOTE: is there a way to have this in the base but apply different modifiers

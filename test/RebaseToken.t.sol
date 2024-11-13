@@ -24,7 +24,7 @@ contract RebaseTokenTest is Test {
 
     function setUp() public {
         vm.startPrank(owner);
-        rebaseToken = new SourceRebaseToken();
+        rebaseToken = new SourceRebaseToken(address(0), address(0)); // we are not sending anything cross-chain so no need to set the router and link contracts
         vault = new Vault(IRebaseToken(address(rebaseToken)));
         sourcePool = makeAddr("pool");
         rebaseToken.setVaultAndPool(address(vault), address(sourcePool));

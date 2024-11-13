@@ -6,8 +6,8 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 // NOTE: name, symbol, decimals need to be included
 contract RebaseTokenBase is ERC20, Ownable {
-    uint256 constant PRECISION_FACTOR = 10 ** 27; // Used to handle fixed-point calculations
-    uint256 public s_interestRate = 5e5; // teeny tiny
+    uint256 constant PRECISION_FACTOR = 1e18; // Used to handle fixed-point calculations
+    uint256 public s_interestRate = 5e14; // interestRate per second. (0.0005 % per second)
     //Initial rate of 1 * precision AKA no growth
     uint256 public s_accumulatedInterest = PRECISION_FACTOR; // The amount of interest that has accumulated UP TO when s_interestRate was last updated.
     uint256 public s_lastUpdatedTimestamp; // the time when s_interestrate and s_accumulatedInterest were last updated
@@ -50,7 +50,8 @@ contract RebaseTokenBase is ERC20, Ownable {
             return 0;
         }
         // shares * current accumulated interest / interest when they deposited (or interest was minted to them)
-        return currentPrincipalBalance * _calculateAccumulatedInterestSinceLastUpdate() / s_userAccumulatedRates[_user];
+        return
+            (currentPrincipalBalance * _calculateAccumulatedInterestSinceLastUpdate()) / s_userAccumulatedRates[_user];
     }
 
     /**
@@ -125,7 +126,11 @@ contract RebaseTokenBase is ERC20, Ownable {
         // represents the linear growth over time = 1 + (interest rate * time)
         uint256 linearInterest = s_interestRate * timeDifference + PRECISION_FACTOR;
         // Calculate the total amount accumulated since the last update
-        return s_accumulatedInterest * linearInterest / PRECISION_FACTOR;
+        return (s_accumulatedInterest * linearInterest) / PRECISION_FACTOR;
+    }
+
+    function getAccumulatedInterestSinceLastUpdate(address _user) external view returns (uint256) {
+        return super.balanceOf(_user) * (_calculateAccumulatedInterestSinceLastUpdate()) / s_userAccumulatedRates[_user];
     }
 
     /**
@@ -136,7 +141,7 @@ contract RebaseTokenBase is ERC20, Ownable {
      *
      */
     function _applyAccruedInterest(address _user) internal returns (uint256, uint256, uint256, uint256) {
-        //NOTE: DO they lose this is updateAccumlatedRate is called
+        //NOTE: DO they lose this is updateAccumlatedRate is called - no but why? Because s_accumulatedInterest contains the needed info
         //NOTE: make internal function / make it public
         uint256 previousPrincipalBalance = super.balanceOf(_user);
 
@@ -149,7 +154,7 @@ contract RebaseTokenBase is ERC20, Ownable {
         _mint(_user, balanceIncrease);
 
         // Update the user's index to reflect the new state
-        s_userAccumulatedRates[_user] = _calculateAccumulatedInterestSinceLastUpdate(); // NOTE: check this (is it an index or an amount)
+        s_userAccumulatedRates[_user] = _calculateAccumulatedInterestSinceLastUpdate(); // NOTE: check this (is it an index or an amount) (does it want to be s_accumulatedRate? Why not?
         return (previousPrincipalBalance, currentBalance, balanceIncrease, s_userAccumulatedRates[_user]);
     }
 }

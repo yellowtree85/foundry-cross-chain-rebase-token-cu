@@ -18,17 +18,8 @@ contract RebaseTokenBase is ERC20, Ownable {
     event ToInterestAccrued(address user, uint256 balance);
     event FromInterestAccrued(address user, uint256 balance);
 
-    error RebaseToken__SenderNotPool(address pool, address sender);
-
     constructor() Ownable(msg.sender) ERC20("RebaseToken", "RBT") {
         s_lastUpdatedTimestamp = block.timestamp;
-    }
-
-    modifier onlyPool() {
-        if (msg.sender != s_pool) {
-            revert RebaseToken__SenderNotPool(s_pool, msg.sender);
-        }
-        _;
     }
 
     /**

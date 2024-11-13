@@ -12,7 +12,16 @@ contract DestRebaseToken is RebaseTokenBase {
     event PoolSet(address pool);
     event RatesUpdated(uint256 newAccumulatedRate, uint256 newInterestRate, uint256 newLastUpdatedTimestamp);
 
+    error RebaseToken__SenderNotPool(address pool, address sender);
+
     constructor() RebaseTokenBase() {}
+
+    modifier onlyPool() {
+        if (msg.sender != s_pool) {
+            revert RebaseToken__SenderNotPool(s_pool, msg.sender);
+        }
+        _;
+    }
 
     function setPool(address pool) external onlyOwner {
         s_pool = pool;

@@ -21,24 +21,14 @@ contract SourceRebaseToken is RebaseTokenBase {
     event AccumulatedRateUpdated(uint256 index, uint256 timestamp);
     event VaultAndPoolSet(address vault, address pool);
     event RatesSentCrossChain(uint256 chainSelector, address token, bytes data);
-    event DestinationTokenSet();
     event InterestRateUpdated(uint256 newInterestRate);
 
-    error RebaseToken__SenderNotVault(address sender);
     error RebaseToken__SenderNotPoolOrVault(address sender);
     error NotEnoughBalance(uint256 linkBalance, uint256 fee);
-    error RebaseToken__DestinationTokenNotSet();
 
     constructor(address _linkToken, address _router) RebaseTokenBase() {
         i_linkToken = _linkToken;
         i_router = _router;
-    }
-
-    modifier onlyVault() {
-        if (msg.sender != s_vault) {
-            revert RebaseToken__SenderNotVault(msg.sender);
-        }
-        _;
     }
 
     modifier onlyPoolOrVault() {
@@ -74,17 +64,6 @@ contract SourceRebaseToken is RebaseTokenBase {
         _beforeUpdate(account, address(0), amount);
         _burn(account, amount);
     }
-
-    // /**
-    //  * @dev calculates the linear interest factor
-    //  * @return the linear interest factor
-    //  *
-    //  */
-    // function _calculateLinearInterest() internal view returns (uint256) {
-    //     uint256 timeDifference = block.timestamp - s_lastUpdatedTimestamp;
-    //     // Calculate the linear interest factor over the elapsed time
-    //     return (s_interestRate * timeDifference + PRECISION_FACTOR);
-    // }
 
     /**
      * @dev updates the interest rate

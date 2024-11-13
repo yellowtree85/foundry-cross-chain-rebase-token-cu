@@ -28,8 +28,8 @@ contract DestRebaseToken is RebaseTokenBase {
         emit PoolSet(pool);
     }
 
-    function setUserIndex(address user, uint256 index) external onlyPool {
-        userIndexes[user] = index;
+    function setUserAccumulatedRate(address user, uint256 index) external onlyPool {
+        s_userAccumulatedRates[user] = index;
         emit UserInfoUpdated(user, index);
     }
 

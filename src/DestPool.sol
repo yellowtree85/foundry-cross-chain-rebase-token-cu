@@ -36,7 +36,7 @@ contract DestPool is TokenPool {
 
         uint256 userIndex = abi.decode(releaseOrMintIn.sourcePoolData, (uint256));
         // call the destination token contract to update the user index
-        IRebaseToken(address(i_token)).setUserIndex(receiver, userIndex);
+        IRebaseToken(address(i_token)).setUserAccumulatedRate(receiver, userIndex);
 
         return Pool.ReleaseOrMintOutV1({destinationAmount: releaseOrMintIn.amount});
     }

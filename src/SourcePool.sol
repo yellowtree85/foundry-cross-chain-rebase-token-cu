@@ -28,12 +28,12 @@ contract SourcePool is TokenPool {
         // NOTE: convert to underlying and bridge the corresponding eligible/pending amounts (if applicable)
 
         // get the necessary info
-        (uint256 newUserIndex) = IRebaseToken(address(i_token)).getUserIndex(receiver);
+        (uint256 newUserAccumulatedRate) = IRebaseToken(address(i_token)).getUserAccumulatedRate(receiver);
 
         // encode a function call to pass the caller's info to the destination pool and update it
         return Pool.LockOrBurnOutV1({
             destTokenAddress: getRemoteToken(lockOrBurnIn.remoteChainSelector),
-            destPoolData: abi.encode(newUserIndex)
+            destPoolData: abi.encode(newUserAccumulatedRate)
         });
     }
 

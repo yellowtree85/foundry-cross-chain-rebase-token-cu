@@ -112,15 +112,15 @@ contract RebaseTokenTest is Test {
         assertEq(balance, ethBalance);
     }
 
-    function testGetUserIndex() public {
+    function testGetUserAccumulatedRate() public {
         // Deposit funds
         vm.startPrank(user);
         vm.deal(user, SEND_VALUE);
         vault.deposit{value: SEND_VALUE}();
         // Get user index
-        uint256 userIndex = rebaseToken.userIndexes(user);
-        console.log("User index: %d", userIndex);
-        assertEq(userIndex, 1e27);
+        uint256 userAccumulatedRate = rebaseToken.getUserAccumulatedRate(user);
+        console.log("User index: %d", userAccumulatedRate);
+        assertEq(userAccumulatedRate, 1e27);
         vm.stopPrank();
     }
 

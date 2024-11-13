@@ -13,7 +13,7 @@ contract RebaseTokenBase is ERC20, Ownable {
     uint256 public s_lastUpdatedTimestamp; // the time when s_interestrate and s_accumulatedInterest were last updated
     address public s_pool; // the pool address (needed for access modifiers)
 
-    mapping(address => uint256) public userIndexes; // NOTE: spelling, do I change to interestGained
+    mapping(address => uint256) public s_userAccumulatedRates; // NOTE: spelling, do I change to interestGained
 
     event ToInterestAccrued(address user, uint256 balance);
     event FromInterestAccrued(address user, uint256 balance);
@@ -28,8 +28,8 @@ contract RebaseTokenBase is ERC20, Ownable {
      * @return the last user index
      *
      */
-    function getUserIndex(address _user) external view returns (uint256) {
-        return userIndexes[_user];
+    function getUserAccumulatedRate(address _user) external view returns (uint256) {
+        return s_userAccumulatedRates[_user];
     }
 
     function getPool() external view returns (address) {
@@ -50,7 +50,7 @@ contract RebaseTokenBase is ERC20, Ownable {
             return 0;
         }
         // shares * current accumulated interest / interest when they deposited (or interest was minted to them)
-        return currentPrincipalBalance * _calculateAccumulatedInterestSinceLastUpdate() / userIndexes[_user];
+        return currentPrincipalBalance * _calculateAccumulatedInterestSinceLastUpdate() / s_userAccumulatedRates[_user];
     }
 
     /**
@@ -104,7 +104,7 @@ contract RebaseTokenBase is ERC20, Ownable {
             // we are burning or transferring tokens
             (, uint256 fromBalance,,) = _applyAccruedInterest(_from);
             if (fromBalance - _value == 0) {
-                userIndexes[_from] = 0;
+                s_userAccumulatedRates[_from] = 0;
             }
             emit FromInterestAccrued(_from, fromBalance);
         }
@@ -149,7 +149,7 @@ contract RebaseTokenBase is ERC20, Ownable {
         _mint(_user, balanceIncrease);
 
         // Update the user's index to reflect the new state
-        userIndexes[_user] = _calculateAccumulatedInterestSinceLastUpdate(); // NOTE: check this (is it an index or an amount)
-        return (previousPrincipalBalance, currentBalance, balanceIncrease, userIndexes[_user]);
+        s_userAccumulatedRates[_user] = _calculateAccumulatedInterestSinceLastUpdate(); // NOTE: check this (is it an index or an amount)
+        return (previousPrincipalBalance, currentBalance, balanceIncrease, s_userAccumulatedRates[_user]);
     }
 }

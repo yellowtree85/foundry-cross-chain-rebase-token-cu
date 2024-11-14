@@ -67,9 +67,12 @@ contract DestRebaseToken is RebaseTokenBase, CCIPReceiver {
         // also sets the user's accumulated rate
         _beforeUpdate(address(0), account, amount);
         // calculates the interest accrued since they initiated the cross-chain transfer on the amount they bridged
-        uint256 amountPlusAccuredInterest =
-            amount * _calculateAccumulatedInterestSinceLastUpdate() / sentAccumulatedInterest;
-        _mint(account, amountPlusAccuredInterest);
+        if (sentAccumulatedInterest < _calculateAccumulatedInterestSinceLastUpdate()) {
+            uint256 amountExtra =
+                amount - (amount * _calculateAccumulatedInterestSinceLastUpdate() / sentAccumulatedInterest);
+        }
+
+        _mint(account, amount);
     }
 
     /// @notice Burns tokens from the sender.

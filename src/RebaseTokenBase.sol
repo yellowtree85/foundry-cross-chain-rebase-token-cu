@@ -7,7 +7,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 // NOTE: name, symbol, decimals need to be included
 contract RebaseTokenBase is ERC20, Ownable {
     uint256 constant PRECISION_FACTOR = 1e18; // Used to handle fixed-point calculations
-    uint256 public s_interestRate = 5e14; // interestRate per second. (0.0005 % per second)
+    uint256 public s_interestRate = 5e10; // interestRate per second. (0.0005 % per second)
     //Initial rate of 1 * precision AKA no growth
     uint256 public s_accumulatedInterest = PRECISION_FACTOR; // The amount of interest that has accumulated UP TO when s_interestRate was last updated.
     uint256 public s_lastUpdatedTimestamp; // the time when s_interestrate and s_accumulatedInterest were last updated

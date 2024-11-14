@@ -232,13 +232,21 @@ contract CrossChainTest is Test {
         IERC20(sepoliaNetworkDetails.linkAddress).approve(sepoliaNetworkDetails.routerAddress, ccipFee); // Approve the fee
         console.log("source user accumulated rate: %d", sourceRebaseToken.getUserAccumulatedRate(alice));
         console.log("source user balance: %d", IERC20(address(sourceRebaseToken)).balanceOf(alice));
+        console.log("source time: %d", block.timestamp);
         IRouterClient(sepoliaNetworkDetails.routerAddress).ccipSend(arbSepoliaNetworkDetails.chainSelector, message); // Send the message
+        assertEq(IERC20(address(sourceRebaseToken)).balanceOf(alice), 0);
+        assertEq(sourceRebaseToken.getUserAccumulatedRate(alice), 0);
         vm.stopPrank();
 
+        vm.selectFork(arbSepoliaFork);
+        vm.warp(block.timestamp + 11800);
+        vm.roll(block.timestamp + 11800);
         ccipLocalSimulatorFork.switchChainAndRouteMessage(arbSepoliaFork);
+
         console.log("destination user accumulated rate: %d", destRebaseToken.getUserAccumulatedRate(alice));
         uint256 destBalance = IERC20(address(destRebaseToken)).balanceOf(alice);
         console.log("Destination balance: %d", destBalance);
+        console.log("Destination time: %d", block.timestamp);
     }
 
     function testChangeInterestRate()

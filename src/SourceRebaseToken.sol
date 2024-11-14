@@ -58,10 +58,14 @@ contract SourceRebaseToken is RebaseTokenBase {
     /// @notice Burns tokens from the sender.
     /// @param amount The number of tokens to be burned.
     /// @dev this function decreases the total supply.
-    function burn(address account, uint256 amount) external onlyPoolOrVault {
+    function burn(address account, uint256 amount)
+        external
+        onlyPoolOrVault
+        returns (uint256 userAccumulatedRateBeforeBurn)
+    {
         // NOTE: should I have a check for zero?
         // accumulates the balance of the user
-        _beforeUpdate(account, address(0), amount);
+        userAccumulatedRateBeforeBurn = _beforeUpdate(account, address(0), amount);
         _burn(account, amount);
     }
 
@@ -70,7 +74,7 @@ contract SourceRebaseToken is RebaseTokenBase {
      * @param interestRate the new interest rate
      *
      */
-    function updateInterestRate(
+    function setInterestRate(
         uint256 interestRate,
         uint64[] memory destinationChainSelectors,
         address[] memory destinationTokens
@@ -83,7 +87,7 @@ contract SourceRebaseToken is RebaseTokenBase {
                 abi.encodeWithSelector(IDestRebaseToken.setRates.selector, s_accumulatedInterest, s_interestRate)
             );
             // send a message to the destination chain to update the share to token ratio
-            _sendMessagePayLINK(destinationChainSelectors[i], destinationTokens[i], data, 0);
+            _sendMessagePayLINK(destinationChainSelectors[i], destinationTokens[i], data);
             emit RatesSentCrossChain(destinationChainSelectors[i], destinationTokens[i], data);
         }
         emit InterestRateUpdated(interestRate);
@@ -103,15 +107,10 @@ contract SourceRebaseToken is RebaseTokenBase {
         emit AccumulatedRateUpdated(s_accumulatedInterest, s_lastUpdatedTimestamp);
     }
 
-    function _sendMessagePayLINK(
-        uint64 _destinationChainSelector,
-        address _receiver,
-        bytes memory _data,
-        uint256 _amount
-    ) internal {
+    function _sendMessagePayLINK(uint64 _destinationChainSelector, address _receiver, bytes memory _data) internal {
         // Create an EVM2AnyMessage struct in memory with necessary information for sending a cross-chain message
         // address(linkToken) means fees are paid in LINK
-        Client.EVM2AnyMessage memory evm2AnyMessage = _buildCCIPMessage(_receiver, address(i_linkToken), _data, _amount);
+        Client.EVM2AnyMessage memory evm2AnyMessage = _buildCCIPMessage(_receiver, address(i_linkToken), _data);
 
         // Get the fee required to send the CCIP message
         uint256 fees = IRouterClient(i_router).getFee(_destinationChainSelector, evm2AnyMessage);
@@ -123,10 +122,6 @@ contract SourceRebaseToken is RebaseTokenBase {
         // approve the Router to transfer LINK tokens on contract's behalf. It will spend the fees in LINK
         IERC20(i_linkToken).approve(address(i_router), fees);
 
-        // approve the Router to spend tokens on contract's behalf. It will spend the amount of the given token
-        // transferFrom sender
-        approve(address(i_router), _amount);
-
         // Send the message through the router
         IRouterClient(i_router).ccipSend(_destinationChainSelector, evm2AnyMessage);
     }
@@ -136,23 +131,17 @@ contract SourceRebaseToken is RebaseTokenBase {
     /// @param _receiver The address of the receiver.
     /// @param _feeToken The token to be used for fees.
     /// @param _data The data to be sent.
-    /// @param _amount The amount of the token to be transferred.
     /// @return Client.EVM2AnyMessage Returns an EVM2AnyMessage struct which contains information for sending a CCIP message.
-    function _buildCCIPMessage(address _receiver, address _feeToken, bytes memory _data, uint256 _amount)
+    function _buildCCIPMessage(address _receiver, address _feeToken, bytes memory _data)
         private
-        view
+        pure
         returns (Client.EVM2AnyMessage memory)
     {
-        // Set the token amounts
-        Client.EVMTokenAmount[] memory tokenAmounts = new Client.EVMTokenAmount[](1);
-        if (_amount != 0) {
-            tokenAmounts[0] = Client.EVMTokenAmount({token: address(this), amount: _amount});
-        }
         // Create an EVM2AnyMessage struct in memory with necessary information for sending a cross-chain message
         return Client.EVM2AnyMessage({
             receiver: abi.encode(_receiver), // ABI-encoded receiver address
             data: _data, // ABI-encoded string
-            tokenAmounts: tokenAmounts, // The amount and type of token being transferred
+            tokenAmounts: new Client.EVMTokenAmount[](0), // The amount and type of token being transferred
             extraArgs: Client._argsToBytes(
                 // Additional arguments, setting gas limit
                 Client.EVMExtraArgsV2({

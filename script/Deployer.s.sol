@@ -90,7 +90,7 @@ contract DestDeployer is Script {
         vm.startBroadcast();
 
         // Step 1) Deploy token
-        destToken = new DestRebaseToken();
+        destToken = new DestRebaseToken(networkDetails.routerAddress);
 
         // Step 2) Deploy pool
         address[] memory allowlist = new address[](0);

@@ -2,7 +2,7 @@
 pragma solidity 0.8.24;
 
 interface IRebaseToken {
-    function burn(address from, uint256 amount) external;
+    function burn(address from, uint256 amount) external returns (uint256);
     function mint(address to, uint256 amount) external;
     function getUserAccumulatedRate(address user) external view returns (uint256);
     function setUserAccumulatedRate(address user, uint256 newIndex) external;

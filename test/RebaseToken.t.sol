@@ -41,7 +41,6 @@ contract RebaseTokenTest is Test {
         console.log("block timestamp: %d", block.timestamp);
         uint256 startBalance = rebaseToken.balanceOf(user);
         console.log("User start balance: %d", startBalance);
-        console.log("accumulated interest: %d", rebaseToken.getAccumulatedInterestSinceLastUpdate(user));
         assertEq(startBalance, SEND_VALUE);
 
         // check the balance has increased after some time has passed
@@ -52,7 +51,6 @@ contract RebaseTokenTest is Test {
         console.log("block timestamp: %d", block.timestamp);
         uint256 middleBalance = rebaseToken.balanceOf(user);
         console.log("User middle balance: %d", middleBalance);
-        console.log("accumulated interest: %d", rebaseToken.getAccumulatedInterestSinceLastUpdate(user));
 
         //assertGt(middleBalance, startBalance);
 
@@ -64,7 +62,6 @@ contract RebaseTokenTest is Test {
         console.log("block timestamp: %d", block.timestamp);
         uint256 endBalance = rebaseToken.balanceOf(user);
         console.log("User end balance: %d", endBalance);
-        console.log("accumulated interest: %d", rebaseToken.getAccumulatedInterestSinceLastUpdate(user));
 
         assertGt(endBalance, middleBalance);
 
@@ -124,15 +121,6 @@ contract RebaseTokenTest is Test {
         uint256 userAccumulatedRate = rebaseToken.getUserAccumulatedRate(user);
         console.log("User index: %d", userAccumulatedRate);
         assertEq(userAccumulatedRate, 1e18);
-        vm.stopPrank();
-    }
-
-    function testCannotDepositMoreThanMax() public {
-        // Deposit funds
-        vm.startPrank(user);
-        vm.deal(user, 1e6);
-        vm.expectRevert();
-        vault.deposit{value: 1e6}();
         vm.stopPrank();
     }
 

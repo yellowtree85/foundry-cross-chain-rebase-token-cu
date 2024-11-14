@@ -50,8 +50,9 @@ contract RebaseTokenBase is ERC20, Ownable {
             return 0;
         }
         // shares * current accumulated interest / interest when they deposited (or interest was minted to them)
-        return
-            (currentPrincipalBalance * _calculateAccumulatedInterestSinceLastUpdate()) / s_userAccumulatedRates[_user];
+        return s_userAccumulatedRates[_user] == 0
+            ? 0
+            : (currentPrincipalBalance * _calculateAccumulatedInterestSinceLastUpdate()) / s_userAccumulatedRates[_user];
     }
 
     /**
@@ -100,10 +101,11 @@ contract RebaseTokenBase is ERC20, Ownable {
      * @param _value the amount to transfer
      *
      */
-    function _beforeUpdate(address _from, address _to, uint256 _value) internal {
+    function _beforeUpdate(address _from, address _to, uint256 _value) internal returns (uint256 userAccumulatedRate) {
         if (_from != address(0)) {
             // we are burning or transferring tokens
             (, uint256 fromBalance,,) = _applyAccruedInterest(_from);
+            userAccumulatedRate = s_userAccumulatedRates[_from];
             if (fromBalance - _value == 0) {
                 s_userAccumulatedRates[_from] = 0;
             }
@@ -112,6 +114,7 @@ contract RebaseTokenBase is ERC20, Ownable {
         if (_to != address(0)) {
             // we are minting or transferring tokens
             (, uint256 toBalance,,) = _applyAccruedInterest(_to);
+            userAccumulatedRate = s_userAccumulatedRates[_to];
             emit ToInterestAccrued(_to, toBalance);
         }
     }
@@ -127,10 +130,6 @@ contract RebaseTokenBase is ERC20, Ownable {
         uint256 linearInterest = s_interestRate * timeDifference + PRECISION_FACTOR;
         // Calculate the total amount accumulated since the last update
         return (s_accumulatedInterest * linearInterest) / PRECISION_FACTOR;
-    }
-
-    function getAccumulatedInterestSinceLastUpdate(address _user) external view returns (uint256) {
-        return super.balanceOf(_user) * (_calculateAccumulatedInterestSinceLastUpdate()) / s_userAccumulatedRates[_user];
     }
 
     /**

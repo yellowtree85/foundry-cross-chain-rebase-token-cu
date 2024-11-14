@@ -1,5 +1,7 @@
 ## NOTE
 
+- assumed rewards are in contract
+
 - send data cross-chain when someone:
   - deposits
   - withdraws
@@ -8,29 +10,25 @@ calcAccumulatedInterestSinceLastUpdate
 
 ```
 block number: 1
-  block timestamp: 1
-  User start balance: 100000
-  accumulated interest: 1000000000000000000000000000
+  calcAccumulatedInterestSinceLastUpdate: 1000000000000000000000000000
+
   block number: 101
-  block timestamp: 101
-  User middle balance: 100000
-  accumulated interest: 1000000000000000000050000000
+  calcAccumulatedInterestSinceLastUpdate: 1000000000000000000050000000
+
   block number: 201
-  block timestamp: 201
-  User end balance: 100000
-  accumulated interest: 1000000000000000000100000000
+  calcAccumulatedInterestSinceLastUpdate: 1000000000000000000100000000
 ```
 
 super.balanceOf
 
 ```block number: 1
-  accumulated interest: 100000
+  super.balanceOf: 100000
 
   block number: 101
-  accumulated interest: 100000
+  super.balanceOf: 100000
 
   block number: 201
-  accumulated interest: 100000
+ super.balanceOf: 100000
 ```
 
 userAccumulatedRate

@@ -15,17 +15,16 @@ contract BridgeTokens is Script {
         address linkTokenAddress,
         address ccipRouterAddress
     ) public {
-        // NOTE: what can I do instead of this by making it interactive? Do I even need this line if I'm using a wallet for this?
-        //uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast();
 
+        // 1. Create the token struct array
         Client.EVMTokenAmount[] memory tokenToSendDetails = new Client.EVMTokenAmount[](1);
         Client.EVMTokenAmount memory tokenAmount =
             Client.EVMTokenAmount({token: tokenToSendAddress, amount: amountToSend});
         tokenToSendDetails[0] = tokenAmount;
-
+        // 2. Approve the router to burn the tokens
         IERC20(tokenToSendAddress).approve(ccipRouterAddress, amountToSend);
-
+        // 3. Create the message struct with no data and the designated amount of tokens
         Client.EVM2AnyMessage memory message = Client.EVM2AnyMessage({
             receiver: abi.encode(receiverAddress), // we need to encode the address to bytes
             data: "", // We don't need any data for this example
@@ -33,10 +32,10 @@ contract BridgeTokens is Script {
             extraArgs: Client._argsToBytes(Client.EVMExtraArgsV1({gasLimit: 0})), // We don't need any extra args for this example
             feeToken: linkTokenAddress // The token used to pay for the fee
         });
-
+        // 4. Approve the router to spend the fees
         uint256 ccipFee = IRouterClient(ccipRouterAddress).getFee(destinationChainSelector, message);
         IERC20(linkTokenAddress).approve(ccipRouterAddress, ccipFee); // Approve the fee
-
+        // 5. Send the message to the router!!
         IRouterClient(ccipRouterAddress).ccipSend(destinationChainSelector, message); // Send the message
 
         vm.stopBroadcast();

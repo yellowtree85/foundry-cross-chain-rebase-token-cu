@@ -9,18 +9,12 @@ contract Vault {
     event Deposit(address indexed user, uint256 amount);
     event Redeem(address indexed user, uint256 amount);
 
-    error Vault__DepositAmountTooHigh(uint256 amount);
-
     constructor(IRebaseToken _rebaseToken) {
         i_rebaseToken = _rebaseToken;
     }
 
     function deposit() external payable {
         // 1. checks and 2. effects are performed in here
-        if (msg.value > 1e5) {
-            revert Vault__DepositAmountTooHigh(msg.value);
-        }
-
         i_rebaseToken.mint(msg.sender, msg.value);
         emit Deposit(msg.sender, msg.value);
     }

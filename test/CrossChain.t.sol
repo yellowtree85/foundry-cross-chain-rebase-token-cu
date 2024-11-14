@@ -35,7 +35,7 @@ contract CrossChainTest is Test {
     uint256 public SEND_VALUE = 1e5;
 
     uint256 sepoliaFork;
-    uint256 zksyncSepoliaFork;
+    uint256 arbSepoliaFork;
 
     DestRebaseToken destRebaseToken;
     SourceRebaseToken sourceRebaseToken;
@@ -44,7 +44,7 @@ contract CrossChainTest is Test {
     SourcePool sourcePool;
 
     TokenAdminRegistry tokenAdminRegistrySepolia;
-    TokenAdminRegistry tokenAdminRegistryZksyncSepolia;
+    TokenAdminRegistry tokenAdminRegistryarbSepolia;
 
     // struct NetworkDetails {
     //     uint64 chainSelector;
@@ -58,10 +58,10 @@ contract CrossChainTest is Test {
     //     address tokenAdminRegistryAddress;
     // }
     Register.NetworkDetails sepoliaNetworkDetails;
-    Register.NetworkDetails zksyncSepoliaNetworkDetails;
+    Register.NetworkDetails arbSepoliaNetworkDetails;
 
     RegistryModuleOwnerCustom registryModuleOwnerCustomSepolia;
-    RegistryModuleOwnerCustom registryModuleOwnerCustomZksyncSepolia;
+    RegistryModuleOwnerCustom registryModuleOwnerCustomarbSepolia;
 
     Vault vault;
 
@@ -73,9 +73,9 @@ contract CrossChainTest is Test {
 
         sourceDeployer = new SourceDeployer();
 
-        // 1. Setup the Sepolia and ZKsync forks
+        // 1. Setup the Sepolia and arb forks
         sepoliaFork = vm.createSelectFork("eth");
-        zksyncSepoliaFork = vm.createFork("zksync");
+        arbSepoliaFork = vm.createFork("arb");
 
         //NOTE: what does this do?
         ccipLocalSimulatorFork = new CCIPLocalSimulatorFork();
@@ -84,8 +84,6 @@ contract CrossChainTest is Test {
         // 2. Deploy and configure on the source chain: Sepolia
         //sepoliaNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
         //(sourceRebaseToken, sourcePool, vault) = sourceDeployer.run(owner);
-
-        // Deploy the token pool on ZKsync
 
         sepoliaNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
         vm.startPrank(owner);
@@ -115,33 +113,34 @@ contract CrossChainTest is Test {
         tokenAdminRegistrySepolia.setPool(address(sourceRebaseToken), address(sourcePool));
         vm.stopPrank();
 
-        // 3. Deploy and configure on the destination chain: Zksync
-        // Deploy the token contract on ZKsync
-        vm.selectFork(zksyncSepoliaFork);
+        // 3. Deploy and configure on the destination chain: arb
+        // Deploy the token contract on arb
+        vm.selectFork(arbSepoliaFork);
         vm.startPrank(owner);
-        destRebaseToken = new DestRebaseToken();
+        console.log("Deploying token on arb");
+        arbSepoliaNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
+        destRebaseToken = new DestRebaseToken(arbSepoliaNetworkDetails.routerAddress);
         console.log("dest rebase token address");
         console.log(address(destRebaseToken));
-        // Deploy the token pool on ZKsync
-        console.log("Deploying token pool on ZKsync");
-        zksyncSepoliaNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
+        // Deploy the token pool on arb
+        console.log("Deploying token pool on arb");
         destPool = new DestPool(
             IERC20(address(destRebaseToken)),
             allowlist,
-            zksyncSepoliaNetworkDetails.rmnProxyAddress,
-            zksyncSepoliaNetworkDetails.routerAddress
+            arbSepoliaNetworkDetails.rmnProxyAddress,
+            arbSepoliaNetworkDetails.routerAddress
         );
         // Set pool on the token contract for permissions
         destRebaseToken.setPool(address(destPool));
-        // Claim role on Zksync
-        registryModuleOwnerCustomZksyncSepolia =
-            RegistryModuleOwnerCustom(zksyncSepoliaNetworkDetails.registryModuleOwnerCustomAddress);
-        registryModuleOwnerCustomZksyncSepolia.registerAdminViaOwner(address(destRebaseToken));
-        // Accept role on Zksync
-        tokenAdminRegistryZksyncSepolia = TokenAdminRegistry(zksyncSepoliaNetworkDetails.tokenAdminRegistryAddress);
-        tokenAdminRegistryZksyncSepolia.acceptAdminRole(address(destRebaseToken));
+        // Claim role on arb
+        registryModuleOwnerCustomarbSepolia =
+            RegistryModuleOwnerCustom(arbSepoliaNetworkDetails.registryModuleOwnerCustomAddress);
+        registryModuleOwnerCustomarbSepolia.registerAdminViaOwner(address(destRebaseToken));
+        // Accept role on arb
+        tokenAdminRegistryarbSepolia = TokenAdminRegistry(arbSepoliaNetworkDetails.tokenAdminRegistryAddress);
+        tokenAdminRegistryarbSepolia.acceptAdminRole(address(destRebaseToken));
         // Link token to pool in the token admin registry
-        tokenAdminRegistryZksyncSepolia.setPool(address(destRebaseToken), address(destPool));
+        tokenAdminRegistryarbSepolia.setPool(address(destRebaseToken), address(destPool));
         vm.stopPrank();
     }
 
@@ -153,7 +152,7 @@ contract CrossChainTest is Test {
         Register.NetworkDetails memory networkDetails
     ) {
         vm.selectFork(fork);
-        vm.prank(owner);
+        vm.startPrank(owner);
         TokenPool.ChainUpdate[] memory chains = new TokenPool.ChainUpdate[](1);
         chains = new TokenPool.ChainUpdate[](1);
         chains[0] = TokenPool.ChainUpdate({
@@ -177,13 +176,6 @@ contract CrossChainTest is Test {
         _;
     }
 
-    function setTokenConfig() public {}
-
-    function depositTokens() public {
-        vm.selectFork(sepoliaFork);
-        Vault(payable(address(vault))).deposit{value: SEND_VALUE}();
-    }
-
     function testBridgeTokens()
         public
         configureTokenPool(
@@ -191,10 +183,10 @@ contract CrossChainTest is Test {
             sourcePool,
             destPool,
             IRebaseToken(address(destRebaseToken)),
-            zksyncSepoliaNetworkDetails
+            arbSepoliaNetworkDetails
         )
         configureTokenPool(
-            zksyncSepoliaFork,
+            arbSepoliaFork,
             destPool,
             sourcePool,
             IRebaseToken(address(sourceRebaseToken)),
@@ -206,9 +198,9 @@ contract CrossChainTest is Test {
         // We are working on the source chain (Sepolia)
         vm.selectFork(sepoliaFork);
         // Pretend a user is interacting with the protocol
-        vm.startPrank(alice);
         // Give the user some ETH
         vm.deal(alice, SEND_VALUE);
+        vm.startPrank(alice);
         // Deposit to the vault and receive tokens
         Vault(payable(address(vault))).deposit{value: SEND_VALUE}();
         // bridge the tokens
@@ -227,18 +219,81 @@ contract CrossChainTest is Test {
             receiver: abi.encode(alice), // we need to encode the address to bytes
             data: "", // We don't need any data for this example
             tokenAmounts: tokenToSendDetails, // this needs to be of type EVMTokenAmount[] as you could send multiple tokens
-            extraArgs: Client._argsToBytes(Client.EVMExtraArgsV1({gasLimit: 0})), // We don't need any extra args for this example
+            extraArgs: "", // We don't need any extra args for this example
             feeToken: sepoliaNetworkDetails.linkAddress // The token used to pay for the fee
         });
         // Get and approve the fees
-        uint256 ccipFee = IRouterClient(sepoliaNetworkDetails.routerAddress).getFee(
-            zksyncSepoliaNetworkDetails.chainSelector, message
-        );
-        // Give the user the fee amount of LINK
-        deal(sepoliaNetworkDetails.linkAddress, alice, ccipFee);
-        IERC20(sepoliaNetworkDetails.linkAddress).approve(sepoliaNetworkDetails.routerAddress, ccipFee); // Approve the fee
-
-        IRouterClient(sepoliaNetworkDetails.routerAddress).ccipSend(zksyncSepoliaNetworkDetails.chainSelector, message); // Send the message
+        uint256 ccipFee =
+            IRouterClient(sepoliaNetworkDetails.routerAddress).getFee(arbSepoliaNetworkDetails.chainSelector, message);
         vm.stopPrank();
+        // Give the user the fee amount of LINK
+        ccipLocalSimulatorFork.requestLinkFromFaucet(alice, ccipFee);
+        vm.startPrank(alice);
+        IERC20(sepoliaNetworkDetails.linkAddress).approve(sepoliaNetworkDetails.routerAddress, ccipFee); // Approve the fee
+        console.log("source user accumulated rate: %d", sourceRebaseToken.getUserAccumulatedRate(alice));
+        console.log("source user balance: %d", IERC20(address(sourceRebaseToken)).balanceOf(alice));
+        IRouterClient(sepoliaNetworkDetails.routerAddress).ccipSend(arbSepoliaNetworkDetails.chainSelector, message); // Send the message
+        vm.stopPrank();
+
+        ccipLocalSimulatorFork.switchChainAndRouteMessage(arbSepoliaFork);
+        console.log("destination user accumulated rate: %d", destRebaseToken.getUserAccumulatedRate(alice));
+        uint256 destBalance = IERC20(address(destRebaseToken)).balanceOf(alice);
+        console.log("Destination balance: %d", destBalance);
+    }
+
+    function testChangeInterestRate()
+        public
+        configureTokenPool(
+            sepoliaFork,
+            sourcePool,
+            destPool,
+            IRebaseToken(address(destRebaseToken)),
+            arbSepoliaNetworkDetails
+        )
+        configureTokenPool(
+            arbSepoliaFork,
+            destPool,
+            sourcePool,
+            IRebaseToken(address(sourceRebaseToken)),
+            sepoliaNetworkDetails
+        )
+    {
+        // Advance the time by 100 seconds on sepolia
+        vm.selectFork(sepoliaFork);
+        vm.warp(block.timestamp + 100);
+        vm.roll(block.timestamp + 100);
+
+        // Advance the time by 100 seconds on arb
+        vm.selectFork(arbSepoliaFork);
+        vm.warp(block.timestamp + 100);
+        vm.roll(block.timestamp + 100);
+
+        vm.selectFork(sepoliaFork);
+        // Update the interest rate on the source token. This will send a cross-chain message to the supplied destination tokens.
+        uint64[] memory chainSelectors = new uint64[](1);
+        chainSelectors[0] = arbSepoliaNetworkDetails.chainSelector;
+        address[] memory destTokens = new address[](1);
+        destTokens[0] = address(destRebaseToken);
+        deal(sepoliaNetworkDetails.linkAddress, address(sourceRebaseToken), 100e18);
+        vm.prank(owner);
+        sourceRebaseToken.setInterestRate(5e13, chainSelectors, destTokens);
+        uint256 sourceInterestRate = sourceRebaseToken.s_interestRate();
+        uint256 sourceAccumulatedInterest = sourceRebaseToken.s_accumulatedInterest();
+        console.log("Source time: %d", block.timestamp);
+        console.log("Source last updated timestamp: %d", sourceRebaseToken.s_lastUpdatedTimestamp());
+        console.log("Source interest rate: %d", sourceInterestRate);
+        console.log("Source accumulated interest: %d", sourceAccumulatedInterest);
+
+        //vm.selectFork(arbSepoliaFork);
+        ccipLocalSimulatorFork.switchChainAndRouteMessage(arbSepoliaFork);
+        uint256 destInterestRate = destRebaseToken.s_interestRate();
+        uint256 destAccumulatedInterest = destRebaseToken.s_accumulatedInterest();
+        console.log("Destination time: %d", block.timestamp);
+        console.log("Destination last updated timestamp: %d", destRebaseToken.s_lastUpdatedTimestamp());
+        console.log("Destination interest rate: %d", destInterestRate);
+        console.log("Destination accumulated interest: %d", destAccumulatedInterest);
+
+        assertEq(sourceInterestRate, destInterestRate);
+        assertEq(sourceAccumulatedInterest, destAccumulatedInterest);
     }
 }

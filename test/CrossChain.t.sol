@@ -66,7 +66,6 @@ contract CrossChainTest is Test {
     Vault vault;
 
     SourceDeployer sourceDeployer;
-    BridgeTokens bridgeTokens;
 
     function setUp() public {
         address[] memory allowlist = new address[](0);
@@ -87,8 +86,7 @@ contract CrossChainTest is Test {
 
         sepoliaNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
         vm.startPrank(owner);
-        sourceRebaseToken =
-            new SourceRebaseToken(sepoliaNetworkDetails.linkAddress, sepoliaNetworkDetails.routerAddress);
+        sourceRebaseToken = new SourceRebaseToken();
         console.log("source rebase token address");
         console.log(address(sourceRebaseToken));
         console.log("Deploying token pool on Sepolia");
@@ -100,6 +98,8 @@ contract CrossChainTest is Test {
         );
         // deploy the vault
         vault = new Vault(IRebaseToken(address(sourceRebaseToken)));
+        // add rewards to the vault
+        vm.deal(address(vault), 1e18);
         // Set pool on the token contract for permissions
         sourceRebaseToken.setVaultAndPool(address(vault), address(sourcePool));
         // Claim role
@@ -117,13 +117,13 @@ contract CrossChainTest is Test {
         // Deploy the token contract on arb
         vm.selectFork(arbSepoliaFork);
         vm.startPrank(owner);
-        console.log("Deploying token on arb");
+        console.log("Deploying token on Arbitrum");
         arbSepoliaNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
-        destRebaseToken = new DestRebaseToken(arbSepoliaNetworkDetails.routerAddress);
+        destRebaseToken = new DestRebaseToken();
         console.log("dest rebase token address");
         console.log(address(destRebaseToken));
         // Deploy the token pool on arb
-        console.log("Deploying token pool on arb");
+        console.log("Deploying token pool on Arbitrum");
         destPool = new DestPool(
             IERC20(address(destRebaseToken)),
             allowlist,
@@ -176,6 +176,57 @@ contract CrossChainTest is Test {
         _;
     }
 
+    function bridgeTokens(address user, uint256 amountToBridge) public {
+        // Create the message to send tokens cross-chain
+        vm.startPrank(user);
+        Client.EVMTokenAmount[] memory tokenToSendDetails = new Client.EVMTokenAmount[](1);
+        Client.EVMTokenAmount memory tokenAmount =
+            Client.EVMTokenAmount({token: address(sourceRebaseToken), amount: amountToBridge});
+        tokenToSendDetails[0] = tokenAmount;
+        // Approve the router to burn tokens on users behalf
+        IERC20(address(sourceRebaseToken)).approve(sepoliaNetworkDetails.routerAddress, amountToBridge);
+
+        Client.EVM2AnyMessage memory message = Client.EVM2AnyMessage({
+            receiver: abi.encode(user), // we need to encode the address to bytes
+            data: "", // We don't need any data for this example
+            tokenAmounts: tokenToSendDetails, // this needs to be of type EVMTokenAmount[] as you could send multiple tokens
+            extraArgs: "", // We don't need any extra args for this example
+            feeToken: sepoliaNetworkDetails.linkAddress // The token used to pay for the fee
+        });
+        // Get and approve the fees
+        uint256 ccipFee =
+            IRouterClient(sepoliaNetworkDetails.routerAddress).getFee(arbSepoliaNetworkDetails.chainSelector, message);
+        vm.stopPrank();
+        // Give the user the fee amount of LINK
+        ccipLocalSimulatorFork.requestLinkFromFaucet(user, ccipFee);
+        vm.startPrank(user);
+        IERC20(sepoliaNetworkDetails.linkAddress).approve(sepoliaNetworkDetails.routerAddress, ccipFee); // Approve the fee
+        // log the values before bridging
+        uint256 sourceBalanceBeforeBridge = IERC20(address(sourceRebaseToken)).balanceOf(user);
+        console.log("source balance before bridge: %d", sourceBalanceBeforeBridge);
+        uint256 sourceInterestRate = sourceRebaseToken.getInterestRate();
+        console.log("source interest rate: %d", sourceInterestRate);
+
+        IRouterClient(sepoliaNetworkDetails.routerAddress).ccipSend(arbSepoliaNetworkDetails.chainSelector, message); // Send the message
+        uint256 sourceBalanceAfterBridge = IERC20(address(sourceRebaseToken)).balanceOf(user);
+        console.log("Source balance after bridge: %d", sourceBalanceAfterBridge);
+        assertEq(sourceBalanceAfterBridge, sourceBalanceBeforeBridge - amountToBridge);
+        vm.stopPrank();
+
+        vm.selectFork(arbSepoliaFork);
+        // Pretend it takes 15 minutes to bridge the tokens
+        vm.warp(block.timestamp + 900);
+        vm.roll(block.timestamp + 900);
+        ccipLocalSimulatorFork.switchChainAndRouteMessage(arbSepoliaFork);
+
+        console.log("destination user interest rate: %d", destRebaseToken.getUserInterestRate(user));
+        uint256 destBalance = IERC20(address(destRebaseToken)).balanceOf(user);
+        console.log("Destination balance: %d", destBalance);
+        assertEq(destBalance, amountToBridge);
+        // check the users interest rate on the destination chain is the interest rate on the source chain at the time of bridging
+        assertEq(destRebaseToken.getUserInterestRate(user), sourceInterestRate);
+    }
+
     function testBridgeTokens()
         public
         configureTokenPool(
@@ -193,7 +244,6 @@ contract CrossChainTest is Test {
             sepoliaNetworkDetails
         )
     {
-        // NOTE: can I use the script instead?
         address alice = makeAddr("alice");
         // We are working on the source chain (Sepolia)
         vm.selectFork(sepoliaFork);
@@ -204,104 +254,9 @@ contract CrossChainTest is Test {
         // Deposit to the vault and receive tokens
         Vault(payable(address(vault))).deposit{value: SEND_VALUE}();
         // bridge the tokens
-        console.log(IERC20(address(sourceRebaseToken)).balanceOf(alice));
-        // Create the message to send
-        Client.EVMTokenAmount[] memory tokenToSendDetails = new Client.EVMTokenAmount[](1);
-        Client.EVMTokenAmount memory tokenAmount = Client.EVMTokenAmount({
-            token: address(sourceRebaseToken),
-            amount: IERC20(address(sourceRebaseToken)).balanceOf(alice)
-        });
-        tokenToSendDetails[0] = tokenAmount;
-        // Approve the router to burn tokens on users behalf
-        IERC20(address(sourceRebaseToken)).approve(sepoliaNetworkDetails.routerAddress, SEND_VALUE);
-
-        Client.EVM2AnyMessage memory message = Client.EVM2AnyMessage({
-            receiver: abi.encode(alice), // we need to encode the address to bytes
-            data: "", // We don't need any data for this example
-            tokenAmounts: tokenToSendDetails, // this needs to be of type EVMTokenAmount[] as you could send multiple tokens
-            extraArgs: "", // We don't need any extra args for this example
-            feeToken: sepoliaNetworkDetails.linkAddress // The token used to pay for the fee
-        });
-        // Get and approve the fees
-        uint256 ccipFee =
-            IRouterClient(sepoliaNetworkDetails.routerAddress).getFee(arbSepoliaNetworkDetails.chainSelector, message);
+        uint256 startBalance = IERC20(address(sourceRebaseToken)).balanceOf(alice);
+        assertEq(startBalance, SEND_VALUE);
         vm.stopPrank();
-        // Give the user the fee amount of LINK
-        ccipLocalSimulatorFork.requestLinkFromFaucet(alice, ccipFee);
-        vm.startPrank(alice);
-        IERC20(sepoliaNetworkDetails.linkAddress).approve(sepoliaNetworkDetails.routerAddress, ccipFee); // Approve the fee
-        console.log("source user accumulated rate: %d", sourceRebaseToken.getUserAccumulatedRate(alice));
-        console.log("source user balance: %d", IERC20(address(sourceRebaseToken)).balanceOf(alice));
-        console.log("source time: %d", block.timestamp);
-        IRouterClient(sepoliaNetworkDetails.routerAddress).ccipSend(arbSepoliaNetworkDetails.chainSelector, message); // Send the message
-        assertEq(IERC20(address(sourceRebaseToken)).balanceOf(alice), 0);
-        assertEq(sourceRebaseToken.getUserAccumulatedRate(alice), 0);
-        vm.stopPrank();
-
-        vm.selectFork(arbSepoliaFork);
-        vm.warp(block.timestamp + 11800);
-        vm.roll(block.timestamp + 11800);
-        ccipLocalSimulatorFork.switchChainAndRouteMessage(arbSepoliaFork);
-
-        console.log("destination user accumulated rate: %d", destRebaseToken.getUserAccumulatedRate(alice));
-        uint256 destBalance = IERC20(address(destRebaseToken)).balanceOf(alice);
-        console.log("Destination balance: %d", destBalance);
-        console.log("Destination time: %d", block.timestamp);
-    }
-
-    function testChangeInterestRate()
-        public
-        configureTokenPool(
-            sepoliaFork,
-            sourcePool,
-            destPool,
-            IRebaseToken(address(destRebaseToken)),
-            arbSepoliaNetworkDetails
-        )
-        configureTokenPool(
-            arbSepoliaFork,
-            destPool,
-            sourcePool,
-            IRebaseToken(address(sourceRebaseToken)),
-            sepoliaNetworkDetails
-        )
-    {
-        // Advance the time by 100 seconds on sepolia
-        vm.selectFork(sepoliaFork);
-        vm.warp(block.timestamp + 100);
-        vm.roll(block.timestamp + 100);
-
-        // Advance the time by 100 seconds on arb
-        vm.selectFork(arbSepoliaFork);
-        vm.warp(block.timestamp + 100);
-        vm.roll(block.timestamp + 100);
-
-        vm.selectFork(sepoliaFork);
-        // Update the interest rate on the source token. This will send a cross-chain message to the supplied destination tokens.
-        uint64[] memory chainSelectors = new uint64[](1);
-        chainSelectors[0] = arbSepoliaNetworkDetails.chainSelector;
-        address[] memory destTokens = new address[](1);
-        destTokens[0] = address(destRebaseToken);
-        deal(sepoliaNetworkDetails.linkAddress, address(sourceRebaseToken), 100e18);
-        vm.prank(owner);
-        sourceRebaseToken.setInterestRate(5e13, chainSelectors, destTokens);
-        uint256 sourceInterestRate = sourceRebaseToken.s_interestRate();
-        uint256 sourceAccumulatedInterest = sourceRebaseToken.s_accumulatedInterest();
-        console.log("Source time: %d", block.timestamp);
-        console.log("Source last updated timestamp: %d", sourceRebaseToken.s_lastUpdatedTimestamp());
-        console.log("Source interest rate: %d", sourceInterestRate);
-        console.log("Source accumulated interest: %d", sourceAccumulatedInterest);
-
-        //vm.selectFork(arbSepoliaFork);
-        ccipLocalSimulatorFork.switchChainAndRouteMessage(arbSepoliaFork);
-        uint256 destInterestRate = destRebaseToken.s_interestRate();
-        uint256 destAccumulatedInterest = destRebaseToken.s_accumulatedInterest();
-        console.log("Destination time: %d", block.timestamp);
-        console.log("Destination last updated timestamp: %d", destRebaseToken.s_lastUpdatedTimestamp());
-        console.log("Destination interest rate: %d", destInterestRate);
-        console.log("Destination accumulated interest: %d", destAccumulatedInterest);
-
-        assertEq(sourceInterestRate, destInterestRate);
-        assertEq(sourceAccumulatedInterest, destAccumulatedInterest);
+        bridgeTokens(alice, SEND_VALUE);
     }
 }

@@ -1,11 +1,10 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
 import {Pool} from "@ccip/contracts/src/v0.8/ccip/libraries/Pool.sol";
 import {TokenPool} from "@ccip/contracts/src/v0.8/ccip/pools/TokenPool.sol";
 import {IERC20} from "@ccip/contracts/src/v0.8/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
 import {IRebaseToken} from "./interfaces/IRebaseToken.sol";
-import {IDestRebaseToken} from "./interfaces/IDestRebaseToken.sol";
 
 contract DestPool is TokenPool {
     error CallToTokenFailed();
@@ -33,9 +32,12 @@ contract DestPool is TokenPool {
     {
         _validateReleaseOrMint(releaseOrMintIn);
         address receiver = releaseOrMintIn.receiver;
-        uint256 userAccumulatedInterest = abi.decode(releaseOrMintIn.sourcePoolData, (uint256));
+        uint256 userInterestRate = abi.decode(releaseOrMintIn.sourcePoolData, (uint256));
         // Mint rebasing tokens to the receiver on the destination chain
-        IDestRebaseToken(address(i_token)).mint(receiver, releaseOrMintIn.amount, userAccumulatedInterest);
+        // This will also mint any interest that has accrued since the last time the user's balance was updated.
+        IRebaseToken(address(i_token)).mint(receiver, releaseOrMintIn.amount);
+        // This needs to be set after otherwise any pending interst that has not yet been minted will be lost.
+        IRebaseToken(address(i_token)).setUserInterestRate(receiver, userInterestRate);
 
         return Pool.ReleaseOrMintOutV1({destinationAmount: releaseOrMintIn.amount});
     }

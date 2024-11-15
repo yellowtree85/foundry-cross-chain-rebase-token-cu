@@ -43,7 +43,7 @@ contract SourceDeployer is Script {
         vm.startBroadcast(owner);
 
         // Step 1) Deploy token
-        sourceToken = new SourceRebaseToken(networkDetails.linkAddress, networkDetails.routerAddress);
+        sourceToken = new SourceRebaseToken();
 
         // Step 2) Deploy SourcePool
         address[] memory allowlist = new address[](0);
@@ -90,7 +90,7 @@ contract DestDeployer is Script {
         vm.startBroadcast();
 
         // Step 1) Deploy token
-        destToken = new DestRebaseToken(networkDetails.routerAddress);
+        destToken = new DestRebaseToken();
 
         // Step 2) Deploy pool
         address[] memory allowlist = new address[](0);

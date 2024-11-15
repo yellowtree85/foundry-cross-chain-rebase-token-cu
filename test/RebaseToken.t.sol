@@ -24,7 +24,7 @@ contract RebaseTokenTest is Test {
 
     function setUp() public {
         vm.startPrank(owner);
-        rebaseToken = new SourceRebaseToken(address(0), address(0)); // we are not sending anything cross-chain so no need to set the router and link contracts
+        rebaseToken = new SourceRebaseToken();
         vault = new Vault(IRebaseToken(address(rebaseToken)));
         sourcePool = makeAddr("pool");
         rebaseToken.setVaultAndPool(address(vault), address(sourcePool));
@@ -43,9 +43,8 @@ contract RebaseTokenTest is Test {
         console.log("User start balance: %d", startBalance);
         assertEq(startBalance, SEND_VALUE);
 
-        // check the balance has increased after some time has passed
-        vm.warp(101);
-        vm.roll(101);
+        // check the balance has increased after 1 hour has passed
+        vm.warp(3601);
 
         console.log("block number: %d", block.number);
         console.log("block timestamp: %d", block.timestamp);
@@ -54,9 +53,8 @@ contract RebaseTokenTest is Test {
 
         //assertGt(middleBalance, startBalance);
 
-        // check the balance has increased after some time has passed
-        vm.warp(201);
-        vm.roll(201);
+        // check the balance has increased after 1 hour has passed
+        vm.warp(7201);
 
         console.log("block number: %d", block.number);
         console.log("block timestamp: %d", block.timestamp);

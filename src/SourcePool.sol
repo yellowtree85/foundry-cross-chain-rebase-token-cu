@@ -20,16 +20,14 @@ contract SourcePool is TokenPool {
     {
         _validateLockOrBurn(lockOrBurnIn);
 
-        address receiver = abi.decode(lockOrBurnIn.receiver, (address));
-        uint256 amount = lockOrBurnIn.amount;
-
         // Burn the tokens on the source chain. This returns their userAccumulatedInterest before the tokens were burned (in case all tokens were burned, we don't want to send 0 cross-chain)
-        uint256 newUserAccumulatedRate = IRebaseToken(address(i_token)).burn(address(this), amount);
+        uint256 currentInterestRate = IRebaseToken(address(i_token)).getInterestRate();
+        IRebaseToken(address(i_token)).burn(address(this), lockOrBurnIn.amount);
 
         // encode a function call to pass the caller's info to the destination pool and update it
         return Pool.LockOrBurnOutV1({
             destTokenAddress: getRemoteToken(lockOrBurnIn.remoteChainSelector),
-            destPoolData: abi.encode(newUserAccumulatedRate)
+            destPoolData: abi.encode(currentInterestRate)
         });
     }
 

@@ -68,7 +68,7 @@ contract DestRebaseToken is RebaseTokenBase {
         }
         // shares * current accumulated interest for that user since their interest was last minted to them.
         // do not need to normalize with the global accumulate interest as each individual user's interest is kept track of and there is no accumulatedInterest since the interest rate is static for users who have bridges. accumulated interest is only needed on the source token since the interest rate is updated by the protocol.
-        return (currentPrincipalBalance * _calculateUserAccumulatedInterestSinceLastUpdate(_user));
+        return (currentPrincipalBalance * _calculateUserAccumulatedInterestSinceLastUpdate(_user) / PRECISION_FACTOR);
     }
 
     /// @notice Mints new tokens for a given address.
@@ -106,7 +106,7 @@ contract DestRebaseToken is RebaseTokenBase {
         // represents the linear growth over time = 1 + (interest rate * time)
         uint256 linearInterest = (s_userInterestRate[_user] * timeDifference) + PRECISION_FACTOR;
         // Calculate the total amount accumulated since the last update
-        return (linearInterest) / PRECISION_FACTOR;
+        return linearInterest;
     }
 
     /**

@@ -131,6 +131,10 @@ contract SourceRebaseToken is RebaseTokenBase {
         return (s_accumulatedInterest * linearInterest) / PRECISION_FACTOR;
     }
 
+    function getAccumulatedInterest() external view returns (uint256) {
+        return _calculateAccumulatedInterestSinceLastUpdate();
+    }
+
     /**
      * @dev accumulates the accrued interest of the user to the principal balance
      * @param _user the address of the user for which the interest is being accumulated

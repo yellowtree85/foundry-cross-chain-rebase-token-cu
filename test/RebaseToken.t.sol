@@ -37,29 +37,29 @@ contract RebaseTokenTest is Test {
         vm.deal(user, SEND_VALUE);
         vault.deposit{value: SEND_VALUE}();
 
-        console.log("block number: %d", block.number);
         console.log("block timestamp: %d", block.timestamp);
         uint256 startBalance = rebaseToken.balanceOf(user);
         console.log("User start balance: %d", startBalance);
+        console.log("Accumulated interest: %d", rebaseToken.getAccumulatedInterest());
         assertEq(startBalance, SEND_VALUE);
 
         // check the balance has increased after 1 hour has passed
         vm.warp(3601);
 
-        console.log("block number: %d", block.number);
         console.log("block timestamp: %d", block.timestamp);
         uint256 middleBalance = rebaseToken.balanceOf(user);
         console.log("User middle balance: %d", middleBalance);
+        console.log("Accumulated interest: %d", rebaseToken.getAccumulatedInterest());
 
         //assertGt(middleBalance, startBalance);
 
         // check the balance has increased after 1 hour has passed
         vm.warp(7201);
 
-        console.log("block number: %d", block.number);
         console.log("block timestamp: %d", block.timestamp);
         uint256 endBalance = rebaseToken.balanceOf(user);
         console.log("User end balance: %d", endBalance);
+        console.log("Accumulated interest: %d", rebaseToken.getAccumulatedInterest());
 
         assertGt(endBalance, middleBalance);
 

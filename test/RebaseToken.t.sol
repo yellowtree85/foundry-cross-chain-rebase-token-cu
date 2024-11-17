@@ -85,29 +85,35 @@ contract RebaseTokenTest is Test {
         vm.stopPrank();
     }
 
-    function testRedeemAfterTimeHasPassed() public {
+    function testRedeemAfterTimeHasPassed(uint256 depositAmount, uint256 time) public {
+        depositAmount = bound(depositAmount, 1e5, type(uint96).max); // this is an Ether value of max 2^78 which is crazy
+        time = bound(time, 100, type(uint96).max); // this is 2.5 * 10^21 years... so yeah if the fuzz test passes, we goooood
+        vm.assume(time > 100);
+
         // Deposit funds
-        vm.deal(user, SEND_VALUE);
+        vm.deal(user, depositAmount);
         vm.prank(user);
-        vault.deposit{value: SEND_VALUE}();
+        vault.deposit{value: depositAmount}();
 
         // check the balance has increased after some time has passed
-        vm.warp(101);
-        vm.roll(101);
+        vm.warp(time);
+
+        // Get balance after time has passed
+        uint256 balance = rebaseToken.balanceOf(user);
 
         // Add rewards to the vault
-        vm.deal(owner, 1 ether);
+        vm.deal(owner, balance - depositAmount);
         vm.prank(owner);
-        addRewardsToVault(1 ether);
+        addRewardsToVault(balance - depositAmount);
 
         // Redeem funds
-        uint256 balance = rebaseToken.balanceOf(user);
         vm.prank(user);
         vault.redeem(balance);
 
         uint256 ethBalance = address(user).balance;
 
         assertEq(balance, ethBalance);
+        assertGt(balance, depositAmount);
     }
 
     function testGetUserAccumulatedInterest() public {

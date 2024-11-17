@@ -11,25 +11,38 @@ import {CCIPReceiver} from "@ccip/contracts/src/v0.8/ccip/applications/CCIPRecei
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-contract RebaseToken is ERC20, Ownable {
+contract RebaseTokenBase is ERC20, Ownable {
     uint256 public constant PRECISION_FACTOR = 1e18; // Used to handle fixed-point calculations
     address public s_pool; // the pool address (needed for access modifiers)
     // this keeps track of the interest rate of the user at the time they last bridged and their destination tokens were updated to mint any accrued interest since they last bridged.
     mapping(address => uint256) public s_userInterestRate;
     // keep track of the timestamp when they last bridged or transferred their tokens. This will be the last time their balance was updated to mint accrued interest.
     mapping(address => uint256) public s_userLastUpdatedTimestamp;
-    uint256 public s_interestRate;
+    uint256 public s_interestRate = 5e10;
 
     event UserInterestRateUpdated(address indexed user, uint256 newUserInterestRate);
     event ToInterestAccrued(address user, uint256 balance);
     event FromInterestAccrued(address user, uint256 balance);
+    event InterestRateUpdated(uint256 newInterestRate);
 
     error RebaseToken__SenderNotPool(address pool, address sender);
+    error RebaseToken__SenderNotPoolOrVault(address sender);
 
     constructor() Ownable(msg.sender) ERC20("RebaseToken", "RBT") {}
 
+    modifier onlyOwnerOrPool() {
+        if (msg.sender != owner() && msg.sender != s_pool) {
+            revert RebaseToken__SenderNotPool(s_pool, msg.sender);
+        }
+        _;
+    }
+
     function getPool() external view returns (address) {
         return s_pool;
+    }
+
+    function getInterestRate() external view returns (uint256) {
+        return s_interestRate;
     }
 
     /**
@@ -42,8 +55,12 @@ contract RebaseToken is ERC20, Ownable {
         return s_userInterestRate[_user];
     }
 
-    function setInterestRate(uint256 _interestRate) external onlyOwner {
-        s_interestRate = _interestRate;
+    function setInterestRate(uint256 _interestRate) external onlyOwnerOrPool {
+        if (_interestRate < s_interestRate) {
+            // if this is coming from the destination chain, this wont be updated since it will be greater than the current interest rate
+            s_interestRate = _interestRate;
+            emit InterestRateUpdated(_interestRate);
+        }
     }
 
     /**
@@ -52,11 +69,10 @@ contract RebaseToken is ERC20, Ownable {
      * @notice this is called when a bridges tokens to this chain
      *
      */
-    function setUserInterestRate(address _user, uint256 _interestRate) external {
+    function _setUserInterestRate(address _user, uint256 _interestRate) internal {
+        // needs to be called alongside _beforeUpdate to make sure the users last updated timestamp is set.
         // update the user's interest rate
-        s_userInterestRate[_user] = s_interestRate;
-        // update the user's last updated timestamp to the current block timestamp
-        s_userLastUpdatedTimestamp[_user] = block.timestamp;
+        s_userInterestRate[_user] = _interestRate;
         emit UserInterestRateUpdated(_user, _interestRate);
     }
 
@@ -90,29 +106,32 @@ contract RebaseToken is ERC20, Ownable {
     }
 
     /// @notice Mints new tokens for a given address.
-    /// @param account The address to mint the new tokens to.
-    /// @param amount The number of tokens to be minted.
+    /// @param _account The address to mint the tokens to.
+    /// @param _value The number of tokens to mint.
+    /// @param _interestRate The interest rate of the user.
     /// @dev this function increases the total supply.
-    function mint(address _account, uint256 _value) public override onlyPool {
-        _beforeUpdate(address(0), _account, _value);
-        setUserInterestRate(_account, s_interestRate);
+    function mint(address _account, uint256 _value, uint256 _interestRate) public virtual {
+        _beforeUpdate(address(0), _account);
+        _setUserInterestRate(_account, _interestRate);
         _mint(_account, _value);
     }
 
     /// @notice Burns tokens from the sender.
-    /// @param amount The number of tokens to be burned.
+    /// @param _account The address to burn the tokens from.
+    /// @param _value The number of tokens to be burned
     /// @dev this function decreases the total supply.
-    function burn(address _account, uint256 _value) public override onlyPool {
-        _beforeUpdate(_account, address(0), _value);
+    function burn(address _account, uint256 _value) public virtual {
+        _beforeUpdate(_account, address(0));
         _burn(_account, _value);
     }
 
     function transfer(address recipient, uint256 amount) public override returns (bool) {
         // accumulates the balance of the user so it is up to date with any interest accumulated.
         // also sets the user's accumulated rate (source token) or last updated timestamp (destination token)
-        _beforeUpdate(msg.sender, recipient, s_userInterestRate[msg.sender]);
-        if (s_userInterestRate[recipient] != 0) {
-            setUserInterestRate(recipient, s_interestRate);
+        _beforeUpdate(msg.sender, recipient);
+        if (s_userInterestRate[recipient] == 0) {
+            // only update the user's interest rate if they have not yet got one. Otherwise people could force others to have lower interest.
+            _setUserInterestRate(recipient, s_interestRate);
         }
         return super.transfer(recipient, amount);
     }
@@ -121,23 +140,26 @@ contract RebaseToken is ERC20, Ownable {
         // accumulates the balance of the user so it is up to date with any interest accumulated.
         // also sets the user's accumulated rate (source token) or last updated timestamp (destination token)
         _beforeUpdate(sender, recipient);
-        if (s_userInterestRate[recipient] != 0) {
-            setUserInterestRate(recipient, s_interestRate);
+        if (s_userInterestRate[recipient] == 0) {
+            // only update the user's interest rate if they have not yet got one. Otherwise people could force others to have lower interest.
+            _setUserInterestRate(recipient, s_interestRate);
         }
         return super.transferFrom(sender, recipient, amount);
     }
 
     /**
      * @dev returns the interest accrued since the last update of the user's balance - aka since the last time the interest accrued was minted to the user.
-     * @return the interest gained since the last update
+     * @return linearInterest the interest accrued since the last update
      *
      */
-    function _calculateUserAccumulatedInterestSinceLastUpdate(address _user) internal view returns (uint256) {
+    function _calculateUserAccumulatedInterestSinceLastUpdate(address _user)
+        internal
+        view
+        returns (uint256 linearInterest)
+    {
         uint256 timeDifference = block.timestamp - s_userLastUpdatedTimestamp[_user];
         // represents the linear growth over time = 1 + (interest rate * time)
-        uint256 linearInterest = (s_userInterestRate[_user] * timeDifference) + PRECISION_FACTOR;
-        // Calculate the total amount accumulated since the last update
-        return linearInterest;
+        linearInterest = (s_userInterestRate[_user] * timeDifference) + PRECISION_FACTOR;
     }
 
     /**
@@ -146,7 +168,7 @@ contract RebaseToken is ERC20, Ownable {
      * @return the users new balance
      *
      */
-    function _mintAccruedInterest(address _user) internal override returns (uint256) {
+    function _mintAccruedInterest(address _user) internal returns (uint256) {
         // Get the user's previous principal balance. The amount of tokens they had last time their interest was minted to them.
         uint256 previousPrincipalBalance = super.balanceOf(_user);
 
@@ -166,26 +188,24 @@ contract RebaseToken is ERC20, Ownable {
      * @dev executes the transfer of tokens, invoked by _transfer(), _mint() and _burn()
      * @param _from the address from which transfer the tokens
      * @param _to the destination address
-     * @param _value the amount to transfer
      *
      */
-    function _beforeUpdate(address _from, address _to, uint256 _value, uint256 _interestRate) internal override {
+    function _beforeUpdate(address _from, address _to) internal {
         if (_from != address(0)) {
             // we are burning or transferring tokens
             // mint any accrued interest since the last time the user's balance was updated
             (uint256 fromBalance) = _mintAccruedInterest(_from);
-            if (fromBalance - _value == 0) {
-                // NOTE: do i need to do this?
-                s_userInterestRate[_from] = 0;
-                s_userLastUpdatedTimestamp[_from] = 0;
-            }
+            // if (fromBalance - _value == 0) {
+            //     // NOTE: do i need to do this?
+            //     s_userInterestRate[_from] = 0;
+            //     s_userLastUpdatedTimestamp[_from] = 0;
+            // }
             emit FromInterestAccrued(_from, fromBalance);
         }
         if (_to != address(0)) {
             // we are minting or transferring tokens
             // mint any accrued interest since the last time the user's balance was updated
             (uint256 toBalance) = _mintAccruedInterest(_to);
-            s_userInterestRate[_to] = _interestRate;
             emit ToInterestAccrued(_to, toBalance);
         }
     }

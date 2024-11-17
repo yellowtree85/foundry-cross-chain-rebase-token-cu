@@ -10,8 +10,7 @@ import {IERC20} from "@ccip/contracts/src/v0.8/vendor/openzeppelin-solidity/v4.8
 import {SourceRebaseToken} from "../src/SourceRebaseToken.sol";
 import {DestRebaseToken} from "../src/DestRebaseToken.sol";
 import {IRebaseToken} from "../src/interfaces/IRebaseToken.sol";
-import {SourcePool} from "../src/SourcePool.sol";
-import {DestPool} from "../src/DestPool.sol";
+import {RebaseTokenPool} from "../src/RebaseTokenPool.sol";
 import {Vault} from "../src/Vault.sol";
 
 contract SourceDeployer is Script {
@@ -29,7 +28,10 @@ contract SourceDeployer is Script {
     //     tokenAdminRegistry = TokenAdminRegistry(networkDetails.tokenAdminRegistryAddress);
     // }
 
-    function run(address owner) public returns (SourceRebaseToken sourceToken, SourcePool sourcePool, Vault vault) {
+    function run(address owner)
+        public
+        returns (SourceRebaseToken sourceToken, RebaseTokenPool sourcePool, Vault vault)
+    {
         // NOTE: what can I do instead of this by making it interactive? Do I even need this line if I'm using a wallet for this?
         //uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         // NOTE: in the test I have already done this though? Is this a problem
@@ -45,7 +47,7 @@ contract SourceDeployer is Script {
 
         // Step 2) Deploy SourcePool
         address[] memory allowlist = new address[](0);
-        sourcePool = new SourcePool(
+        sourcePool = new RebaseTokenPool(
             IERC20(address(sourceToken)), allowlist, networkDetails.rmnProxyAddress, networkDetails.routerAddress
         );
 
@@ -82,7 +84,7 @@ contract DestDeployer is Script {
         tokenAdminRegistry = TokenAdminRegistry(networkDetails.tokenAdminRegistryAddress);
     }
 
-    function run() public returns (DestRebaseToken destToken, DestPool destPool) {
+    function run() public returns (DestRebaseToken destToken, RebaseTokenPool destPool) {
         // NOTE: what can I do instead of this by making it interactive? Do I even need this line if I'm using a wallet for this?
         //uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast();
@@ -92,7 +94,7 @@ contract DestDeployer is Script {
 
         // Step 2) Deploy pool
         address[] memory allowlist = new address[](0);
-        destPool = new DestPool(
+        destPool = new RebaseTokenPool(
             IERC20(address(destToken)), allowlist, networkDetails.rmnProxyAddress, networkDetails.routerAddress
         );
 

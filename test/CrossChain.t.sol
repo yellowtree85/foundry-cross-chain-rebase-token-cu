@@ -15,8 +15,7 @@ import {Client} from "@ccip/contracts/src/v0.8/ccip/libraries/Client.sol";
 import {SourceRebaseToken} from "../src/SourceRebaseToken.sol";
 import {DestRebaseToken} from "../src/DestRebaseToken.sol";
 
-import {SourcePool} from "../src/SourcePool.sol";
-import {DestPool} from "../src/DestPool.sol";
+import {RebaseTokenPool} from "../src/RebaseTokenPool.sol";
 
 import {Vault} from "../src/Vault.sol";
 import {IRebaseToken} from "../src/interfaces/IRebaseToken.sol";
@@ -38,8 +37,8 @@ contract CrossChainTest is Test {
     DestRebaseToken destRebaseToken;
     SourceRebaseToken sourceRebaseToken;
 
-    DestPool destPool;
-    SourcePool sourcePool;
+    RebaseTokenPool destPool;
+    RebaseTokenPool sourcePool;
 
     TokenAdminRegistry tokenAdminRegistrySepolia;
     TokenAdminRegistry tokenAdminRegistryarbSepolia;
@@ -76,7 +75,7 @@ contract CrossChainTest is Test {
         console.log("source rebase token address");
         console.log(address(sourceRebaseToken));
         console.log("Deploying token pool on Sepolia");
-        sourcePool = new SourcePool(
+        sourcePool = new RebaseTokenPool(
             IERC20(address(sourceRebaseToken)),
             allowlist,
             sepoliaNetworkDetails.rmnProxyAddress,
@@ -110,7 +109,7 @@ contract CrossChainTest is Test {
         console.log(address(destRebaseToken));
         // Deploy the token pool on Arbitrum
         console.log("Deploying token pool on Arbitrum");
-        destPool = new DestPool(
+        destPool = new RebaseTokenPool(
             IERC20(address(destRebaseToken)),
             allowlist,
             arbSepoliaNetworkDetails.rmnProxyAddress,

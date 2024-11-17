@@ -23,4 +23,12 @@ contract DestRebaseToken is RebaseTokenBase {
         s_pool = pool;
         emit PoolSet(pool);
     }
+
+    function mint(address to, uint256 amount, uint256 interestRate) public override onlyPool {
+        super.mint(to, amount, interestRate);
+    }
+
+    function burn(address from, uint256 amount) public override onlyPool {
+        super.burn(from, amount);
+    }
 }

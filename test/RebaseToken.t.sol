@@ -40,26 +40,23 @@ contract RebaseTokenTest is Test {
         console.log("block timestamp: %d", block.timestamp);
         uint256 startBalance = rebaseToken.balanceOf(user);
         console.log("User start balance: %d", startBalance);
-        console.log("Accumulated interest: %d", rebaseToken.getAccumulatedInterest());
         assertEq(startBalance, SEND_VALUE);
 
         // check the balance has increased after 1 hour has passed
-        vm.warp(3601);
+        vm.warp(block.timestamp + 1 hours);
 
         console.log("block timestamp: %d", block.timestamp);
         uint256 middleBalance = rebaseToken.balanceOf(user);
         console.log("User middle balance: %d", middleBalance);
-        console.log("Accumulated interest: %d", rebaseToken.getAccumulatedInterest());
 
         //assertGt(middleBalance, startBalance);
 
         // check the balance has increased after 1 hour has passed
-        vm.warp(7201);
+        vm.warp(block.timestamp + 1 hours);
 
         console.log("block timestamp: %d", block.timestamp);
         uint256 endBalance = rebaseToken.balanceOf(user);
         console.log("User end balance: %d", endBalance);
-        console.log("Accumulated interest: %d", rebaseToken.getAccumulatedInterest());
 
         assertGt(endBalance, middleBalance);
 
@@ -86,9 +83,10 @@ contract RebaseTokenTest is Test {
     }
 
     function testRedeemAfterTimeHasPassed(uint256 depositAmount, uint256 time) public {
+        vm.assume(depositAmount > 1e5);
+        vm.assume(time > 100);
         depositAmount = bound(depositAmount, 1e5, type(uint96).max); // this is an Ether value of max 2^78 which is crazy
         time = bound(time, 100, type(uint96).max); // this is 2.5 * 10^21 years... so yeah if the fuzz test passes, we goooood
-        vm.assume(time > 100);
 
         // Deposit funds
         vm.deal(user, depositAmount);
@@ -116,23 +114,12 @@ contract RebaseTokenTest is Test {
         assertGt(balance, depositAmount);
     }
 
-    function testGetUserAccumulatedInterest() public {
-        // Deposit funds
-        vm.startPrank(user);
-        vm.deal(user, SEND_VALUE);
-        vault.deposit{value: SEND_VALUE}();
-        // Get user index
-        uint256 userAccumulatedRate = rebaseToken.getUserAccumulatedInterest(user);
-        console.log("User index: %d", userAccumulatedRate);
-        assertEq(userAccumulatedRate, 1e18);
-        vm.stopPrank();
-    }
-
     function testCannotCallMint() public {
         // Deposit funds
         vm.startPrank(user);
+        uint256 interestRate = rebaseToken.getInterestRate();
         vm.expectRevert();
-        rebaseToken.mint(user, SEND_VALUE);
+        rebaseToken.mint(user, SEND_VALUE, interestRate);
         vm.stopPrank();
     }
 
@@ -158,11 +145,11 @@ contract RebaseTokenTest is Test {
         // Deposit funds
         //uint256 amount = 1e5;
         //uint256 amountToSend = 5e4;
-        amount = bound(amount, 1e3, type(uint96).max);
-        amountToSend = bound(amountToSend, 1e3, type(uint96).max);
         // do this assume to avoid overflow
-        vm.assume(amount >= amountToSend);
-        vm.assume(amount - amountToSend >= 1e3);
+        vm.assume(amount < type(uint96).max);
+        vm.assume(amountToSend < type(uint96).max);
+        vm.assume(amount >= 1e3 + amountToSend);
+        vm.assume(amountToSend > 1e3);
 
         vm.deal(user, amount);
         vm.prank(user);
@@ -180,9 +167,6 @@ contract RebaseTokenTest is Test {
         assertEq(userBalanceAfterTransfer, userBalance - amountToSend);
         assertEq(userTwoBalancAfterTransfer, userTwoBalance + amountToSend);
         // After some time has passed, check the balance of the two users has increased
-        uint256 userAccumulatedInterest = rebaseToken.getUserAccumulatedInterest(user);
-        uint256 userTwoAccumulatedInterest = rebaseToken.getUserAccumulatedInterest(userTwo);
-        assertEq(userAccumulatedInterest, userTwoAccumulatedInterest); // they should be the same since they were just updated
         vm.warp(100000);
         uint256 userBalanceAfterWarp = rebaseToken.balanceOf(user);
         uint256 userTwoBalanceAfterWarp = rebaseToken.balanceOf(userTwo);
@@ -190,7 +174,6 @@ contract RebaseTokenTest is Test {
         // uint256 userTwoAccumulatedInterestAfterWarp = rebaseToken.getUserAccumulatedInterest(userTwo);
         // console.log("User accumulated interest after warp: %d", userAccumulatedInterestAfterWarp);
         // console.log("User two accumulated interest after warp: %d", userTwoAccumulatedInterestAfterWarp);
-        console.log("Accumulated Interest after warp: %d", rebaseToken.getAccumulatedInterest());
         assertGt(userBalanceAfterWarp, userBalanceAfterTransfer);
         assertGt(userTwoBalanceAfterWarp, userTwoBalancAfterTransfer);
     }

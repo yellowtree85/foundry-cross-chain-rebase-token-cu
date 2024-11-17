@@ -10,7 +10,7 @@ import {CCIPReceiver} from "@ccip/contracts/src/v0.8/ccip/applications/CCIPRecei
 
 import {RebaseTokenBase} from "./RebaseTokenBase.sol";
 
-contract RebaseToken is RebaseTokenBase {
+contract SourceRebaseToken is RebaseTokenBase {
     address public s_vault;
 
     event VaultAndPoolSet(address vault, address pool);
@@ -28,5 +28,13 @@ contract RebaseToken is RebaseTokenBase {
         s_vault = vault;
         s_pool = pool;
         emit VaultAndPoolSet(vault, pool);
+    }
+
+    function mint(address to, uint256 amount, uint256 interestRate) public override onlyPoolOrVault {
+        super.mint(to, amount, interestRate);
+    }
+
+    function burn(address from, uint256 amount) public override onlyPoolOrVault {
+        super.burn(from, amount);
     }
 }

@@ -110,13 +110,13 @@ contract RebaseTokenTest is Test {
         assertEq(balance, ethBalance);
     }
 
-    function testGetUserAccumulatedRate() public {
+    function testGetUserAccumulatedInterest() public {
         // Deposit funds
         vm.startPrank(user);
         vm.deal(user, SEND_VALUE);
         vault.deposit{value: SEND_VALUE}();
         // Get user index
-        uint256 userAccumulatedRate = rebaseToken.getUserAccumulatedRate(user);
+        uint256 userAccumulatedRate = rebaseToken.getUserAccumulatedInterest(user);
         console.log("User index: %d", userAccumulatedRate);
         assertEq(userAccumulatedRate, 1e18);
         vm.stopPrank();
@@ -148,12 +148,44 @@ contract RebaseTokenTest is Test {
         vm.stopPrank();
     }
 
-    // NOTE: do I even need to add this check?
-    // function testCannotBurnZero() public {
-    //     // Deposit funds
-    //     vm.startPrank(user);
-    //     vm.expectRevert();
-    //     vault.redeem(0);
-    //     vm.stopPrank();
-    // }
+    function testTransfer(uint256 amount, uint256 amountToSend) public {
+        // Deposit funds
+        //uint256 amount = 1e5;
+        //uint256 amountToSend = 5e4;
+        amount = bound(amount, 1e3, type(uint96).max);
+        amountToSend = bound(amountToSend, 1e3, type(uint96).max);
+        // do this assume to avoid overflow
+        vm.assume(amount >= amountToSend);
+        vm.assume(amount - amountToSend >= 1e3);
+
+        vm.deal(user, amount);
+        vm.prank(user);
+        vault.deposit{value: amount}();
+
+        // Send half the balance to another user
+        address userTwo = makeAddr("userTwo");
+        uint256 userBalance = rebaseToken.balanceOf(user);
+        uint256 userTwoBalance = rebaseToken.balanceOf(userTwo);
+
+        vm.prank(user);
+        rebaseToken.transfer(userTwo, amountToSend);
+        uint256 userBalanceAfterTransfer = rebaseToken.balanceOf(user);
+        uint256 userTwoBalancAfterTransfer = rebaseToken.balanceOf(userTwo);
+        assertEq(userBalanceAfterTransfer, userBalance - amountToSend);
+        assertEq(userTwoBalancAfterTransfer, userTwoBalance + amountToSend);
+        // After some time has passed, check the balance of the two users has increased
+        uint256 userAccumulatedInterest = rebaseToken.getUserAccumulatedInterest(user);
+        uint256 userTwoAccumulatedInterest = rebaseToken.getUserAccumulatedInterest(userTwo);
+        assertEq(userAccumulatedInterest, userTwoAccumulatedInterest); // they should be the same since they were just updated
+        vm.warp(100000);
+        uint256 userBalanceAfterWarp = rebaseToken.balanceOf(user);
+        uint256 userTwoBalanceAfterWarp = rebaseToken.balanceOf(userTwo);
+        // uint256 userAccumulatedInterestAfterWarp = rebaseToken.getUserAccumulatedInterest(user);
+        // uint256 userTwoAccumulatedInterestAfterWarp = rebaseToken.getUserAccumulatedInterest(userTwo);
+        // console.log("User accumulated interest after warp: %d", userAccumulatedInterestAfterWarp);
+        // console.log("User two accumulated interest after warp: %d", userTwoAccumulatedInterestAfterWarp);
+        console.log("Accumulated Interest after warp: %d", rebaseToken.getAccumulatedInterest());
+        assertGt(userBalanceAfterWarp, userBalanceAfterTransfer);
+        assertGt(userTwoBalanceAfterWarp, userTwoBalancAfterTransfer);
+    }
 }

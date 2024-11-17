@@ -44,7 +44,7 @@ contract SourceRebaseToken is RebaseTokenBase {
      *
      */
 
-    function getUserAccumulatedRate(address _user) external view returns (uint256) {
+    function getUserAccumulatedInterest(address _user) external view returns (uint256) {
         return s_userAccumulatedInterest[_user];
     }
 
@@ -185,10 +185,10 @@ contract SourceRebaseToken is RebaseTokenBase {
     //     if (_from != address(0)) {
     //         // we are burning or transferring tokens
     //         (uint256 fromBalance) = _mintAccruedInterest(_from);
-    //         // if (fromBalance - _value == 0) {
-    //         //     // NOTE: do I need to do this cos if I don't then I canput it in the base.
-    //         //     s_userAccumulatedInterest[_from] = 0;
-    //         // }
+    //         if (fromBalance - _value == 0) {
+    //             // NOTE: do I need to do this cos if I don't then I canput it in the base.
+    //             s_userAccumulatedInterest[_from] = 0;
+    //         }
     //         emit FromInterestAccrued(_from, fromBalance);
     //     }
     //     if (_to != address(0)) {

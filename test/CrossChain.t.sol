@@ -163,6 +163,7 @@ contract CrossChainTest is Test {
 
     function bridgeTokens(uint256 amountToBridge) public {
         // Create the message to send tokens cross-chain
+        vm.selectFork(sepoliaFork);
         vm.startPrank(alice);
         Client.EVMTokenAmount[] memory tokenToSendDetails = new Client.EVMTokenAmount[](1);
         Client.EVMTokenAmount memory tokenAmount =
@@ -201,18 +202,22 @@ contract CrossChainTest is Test {
         vm.selectFork(arbSepoliaFork);
         // Pretend it takes 15 minutes to bridge the tokens
         vm.warp(block.timestamp + 900);
+        // get initial balance on Arbitrum
+        uint256 initialArbBalance = IERC20(address(destRebaseToken)).balanceOf(alice);
+        console.log("Arbitrum balance before bridge: %d", initialArbBalance);
         ccipLocalSimulatorFork.switchChainAndRouteMessage(arbSepoliaFork);
 
         console.log("Arbitrum user interest rate: %d", destRebaseToken.getUserInterestRate(alice));
         uint256 destBalance = IERC20(address(destRebaseToken)).balanceOf(alice);
         console.log("Arbitrum balance after bridge: %d", destBalance);
-        assertEq(destBalance, amountToBridge);
+        assertEq(destBalance, initialArbBalance + amountToBridge);
         // check the users interest rate on the destination chain is the interest rate on the source chain at the time of bridging
         assertEq(destRebaseToken.getUserInterestRate(alice), sourceInterestRate);
     }
 
     function bridgeTokensBack(uint256 amountToBridge) public {
         // Create the message to send tokens cross-chain
+        vm.selectFork(arbSepoliaFork);
         vm.startPrank(alice);
         Client.EVMTokenAmount[] memory tokenToSendDetails = new Client.EVMTokenAmount[](1);
         Client.EVMTokenAmount memory tokenAmount =
@@ -306,8 +311,48 @@ contract CrossChainTest is Test {
         vm.stopPrank();
         // bridge ALL TOKENS to the destination chain
         bridgeTokens(SEND_VALUE);
-        // bridge back ALL TOKENS to the source chain after 15 minutes
+        // bridge back ALL TOKENS to the source chain after 1 hour
         vm.selectFork(arbSepoliaFork);
+        console.log("User Balance Before Warp: %d", destRebaseToken.balanceOf(alice));
+        vm.warp(block.timestamp + 3600);
+        console.log("User Balance After Warp: %d", destRebaseToken.balanceOf(alice));
+        uint256 destBalance = IERC20(address(destRebaseToken)).balanceOf(alice);
+        console.log("Amount bridging back %d tokens ", destBalance);
+        bridgeTokensBack(destBalance);
+    }
+
+    function testBridgeTwice() public {
+        configureTokenPool(
+            sepoliaFork, sourcePool, destPool, IRebaseToken(address(destRebaseToken)), arbSepoliaNetworkDetails
+        );
+        configureTokenPool(
+            arbSepoliaFork, destPool, sourcePool, IRebaseToken(address(sourceRebaseToken)), sepoliaNetworkDetails
+        );
+        // We are working on the source chain (Sepolia)
+        vm.selectFork(sepoliaFork);
+        // Pretend a user is interacting with the protocol
+        // Give the user some ETH
+        vm.deal(alice, SEND_VALUE);
+        vm.startPrank(alice);
+        // Deposit to the vault and receive tokens
+        Vault(payable(address(vault))).deposit{value: SEND_VALUE}();
+        uint256 startBalance = IERC20(address(sourceRebaseToken)).balanceOf(alice);
+        assertEq(startBalance, SEND_VALUE);
+        vm.stopPrank();
+        // bridge half tokens to the destination chain
+        // bridge the tokens
+        console.log("Bridging %d tokens (first bridging event)", SEND_VALUE / 2);
+        bridgeTokens(SEND_VALUE / 2);
+        // wait 1 hour for the interest to accrue
+        vm.selectFork(sepoliaFork);
+        vm.warp(block.timestamp + 3600);
+        uint256 newSourceBalance = IERC20(address(sourceRebaseToken)).balanceOf(alice);
+        // bridge the tokens
+        console.log("Bridging %d tokens (second bridging event)", newSourceBalance);
+        bridgeTokens(newSourceBalance);
+        // bridge back ALL TOKENS to the source chain after 1 hour
+        vm.selectFork(arbSepoliaFork);
+        // wait an hour for the tokens to accrue interest on the destination chain
         console.log("User Balance Before Warp: %d", destRebaseToken.balanceOf(alice));
         vm.warp(block.timestamp + 3600);
         console.log("User Balance After Warp: %d", destRebaseToken.balanceOf(alice));

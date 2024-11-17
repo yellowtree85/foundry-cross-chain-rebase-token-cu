@@ -6,5 +6,4 @@ interface IRebaseToken {
     function mint(address to, uint256 amount) external;
     function getInterestRate() external view returns (uint256);
     function setUserInterestRate(address user, uint256 newInterestRate) external;
-    function getUserInterestRate(address user) external view returns (uint256);
 }

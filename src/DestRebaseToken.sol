@@ -143,11 +143,11 @@ contract DestRebaseToken is RebaseTokenBase {
     //         // we are burning or transferring tokens
     //         // mint any accrued interest since the last time the user's balance was updated
     //         (uint256 fromBalance) = _mintAccruedInterest(_from);
-    //         // if (fromBalance - _value == 0) {
-    //         //     // NOTE: do i need to do this?
-    //         //     s_userInterestRate[_from] = 0;
-    //         //     s_userLastUpdatedTimestamp[_from] = 0;
-    //         // }
+    //         if (fromBalance - _value == 0) {
+    //             // NOTE: do i need to do this?
+    //             s_userInterestRate[_from] = 0;
+    //             s_userLastUpdatedTimestamp[_from] = 0;
+    //         }
     //         emit FromInterestAccrued(_from, fromBalance);
     //     }
     //     if (_to != address(0)) {

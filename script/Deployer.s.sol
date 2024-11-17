@@ -14,8 +14,6 @@ import {SourcePool} from "../src/SourcePool.sol";
 import {DestPool} from "../src/DestPool.sol";
 import {Vault} from "../src/Vault.sol";
 
-import {console} from "forge-std/Console.sol";
-
 contract SourceDeployer is Script {
     CCIPLocalSimulatorFork public ccipLocalSimulatorFork;
     Register.NetworkDetails networkDetails;

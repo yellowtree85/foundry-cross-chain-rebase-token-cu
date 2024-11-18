@@ -14,12 +14,11 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 
 contract RebaseToken is ERC20, Ownable, AccessControl {
     uint256 public constant PRECISION_FACTOR = 1e18; // Used to handle fixed-point calculations
-    address public s_pool; // the pool address (needed for access modifiers)
     // this keeps track of the interest rate of the user at the time they last bridged and their destination tokens were updated to mint any accrued interest since they last bridged.
     mapping(address => uint256) public s_userInterestRate;
     // keep track of the timestamp when they last bridged or transferred their tokens. This will be the last time their balance was updated to mint accrued interest.
     mapping(address => uint256) public s_userLastUpdatedTimestamp;
-    uint256 public s_interestRate = 5e10;
+    uint256 public s_interestRate = 5e10; // this is the global interest rate of the token - when users mint, this is the interest rate they will get.
     bytes32 public constant MINT_AND_BURN_ROLE = keccak256("MINT_AND_BURN_ROLE");
 
     event UserInterestRateUpdated(address indexed user, uint256 newUserInterestRate);
@@ -27,16 +26,9 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
     event FromInterestAccrued(address user, uint256 balance);
     event InterestRateUpdated(uint256 newInterestRate);
 
-    error RebaseToken__SenderNotPool(address pool, address sender);
-    error RebaseToken__SenderNotPoolOrVault(address sender);
-
     constructor() Ownable(msg.sender) ERC20("RebaseToken", "RBT") {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(MINT_AND_BURN_ROLE, msg.sender);
-    }
-
-    function getPool() external view returns (address) {
-        return s_pool;
     }
 
     function getInterestRate() external view returns (uint256) {
@@ -54,6 +46,7 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
     }
 
     function setInterestRate(uint256 _interestRate) external onlyRole(MINT_AND_BURN_ROLE) {
+        // only allow the interest rate to decrease but we don't want it to revert in case it's the destination chain that is updating the interest rate (in which case it'll either be the same or larger so it won't update)
         if (_interestRate < s_interestRate) {
             // if this is coming from the destination chain, this wont be updated since it will be greater than the current interest rate
             s_interestRate = _interestRate;
@@ -67,7 +60,9 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
     /// @param _interestRate The interest rate of the user.
     /// @dev this function increases the total supply.
     function mint(address _account, uint256 _value, uint256 _interestRate) public onlyRole(MINT_AND_BURN_ROLE) {
+        // Mints any existing interest that has accrued since the last time the user's balance was updated.
         _beforeUpdate(address(0), _account);
+        // Sets the users interest rate to either their bridged value if they are bridging or to the current interest rate if they are depositing.
         _setUserInterestRate(_account, _interestRate);
         _mint(_account, _value);
     }
@@ -77,6 +72,7 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
     /// @param _value The number of tokens to be burned
     /// @dev this function decreases the total supply.
     function burn(address _account, uint256 _value) public onlyRole(MINT_AND_BURN_ROLE) {
+        // Mints any existing interest that has accrued since the last time the user's balance was updated.
         _beforeUpdate(_account, address(0));
         _burn(_account, _value);
     }

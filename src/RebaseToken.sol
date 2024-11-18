@@ -10,8 +10,9 @@ import {CCIPReceiver} from "@ccip/contracts/src/v0.8/ccip/applications/CCIPRecei
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 
-contract RebaseTokenBase is ERC20, Ownable {
+contract RebaseToken is ERC20, Ownable, AccessControl {
     uint256 public constant PRECISION_FACTOR = 1e18; // Used to handle fixed-point calculations
     address public s_pool; // the pool address (needed for access modifiers)
     // this keeps track of the interest rate of the user at the time they last bridged and their destination tokens were updated to mint any accrued interest since they last bridged.
@@ -19,6 +20,7 @@ contract RebaseTokenBase is ERC20, Ownable {
     // keep track of the timestamp when they last bridged or transferred their tokens. This will be the last time their balance was updated to mint accrued interest.
     mapping(address => uint256) public s_userLastUpdatedTimestamp;
     uint256 public s_interestRate = 5e10;
+    bytes32 public constant MINT_AND_BURN_ROLE = keccak256("MINT_AND_BURN_ROLE");
 
     event UserInterestRateUpdated(address indexed user, uint256 newUserInterestRate);
     event ToInterestAccrued(address user, uint256 balance);
@@ -28,13 +30,9 @@ contract RebaseTokenBase is ERC20, Ownable {
     error RebaseToken__SenderNotPool(address pool, address sender);
     error RebaseToken__SenderNotPoolOrVault(address sender);
 
-    constructor() Ownable(msg.sender) ERC20("RebaseToken", "RBT") {}
-
-    modifier onlyOwnerOrPool() {
-        if (msg.sender != owner() && msg.sender != s_pool) {
-            revert RebaseToken__SenderNotPool(s_pool, msg.sender);
-        }
-        _;
+    constructor() Ownable(msg.sender) ERC20("RebaseToken", "RBT") {
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(MINT_AND_BURN_ROLE, msg.sender);
     }
 
     function getPool() external view returns (address) {
@@ -55,7 +53,7 @@ contract RebaseTokenBase is ERC20, Ownable {
         return s_userInterestRate[_user];
     }
 
-    function setInterestRate(uint256 _interestRate) external onlyOwnerOrPool {
+    function setInterestRate(uint256 _interestRate) external onlyRole(MINT_AND_BURN_ROLE) {
         if (_interestRate < s_interestRate) {
             // if this is coming from the destination chain, this wont be updated since it will be greater than the current interest rate
             s_interestRate = _interestRate;
@@ -63,17 +61,24 @@ contract RebaseTokenBase is ERC20, Ownable {
         }
     }
 
-    /**
-     * @dev updates the interest rate. This is called only by the pool when a user bridges to this chain.
-     * @param _interestRate the new interest rate
-     * @notice this is called when a bridges tokens to this chain
-     *
-     */
-    function _setUserInterestRate(address _user, uint256 _interestRate) internal {
-        // needs to be called alongside _beforeUpdate to make sure the users last updated timestamp is set.
-        // update the user's interest rate
-        s_userInterestRate[_user] = _interestRate;
-        emit UserInterestRateUpdated(_user, _interestRate);
+    /// @notice Mints new tokens for a given address.
+    /// @param _account The address to mint the tokens to.
+    /// @param _value The number of tokens to mint.
+    /// @param _interestRate The interest rate of the user.
+    /// @dev this function increases the total supply.
+    function mint(address _account, uint256 _value, uint256 _interestRate) public onlyRole(MINT_AND_BURN_ROLE) {
+        _beforeUpdate(address(0), _account);
+        _setUserInterestRate(_account, _interestRate);
+        _mint(_account, _value);
+    }
+
+    /// @notice Burns tokens from the sender.
+    /// @param _account The address to burn the tokens from.
+    /// @param _value The number of tokens to be burned
+    /// @dev this function decreases the total supply.
+    function burn(address _account, uint256 _value) public onlyRole(MINT_AND_BURN_ROLE) {
+        _beforeUpdate(_account, address(0));
+        _burn(_account, _value);
     }
 
     /**
@@ -105,26 +110,6 @@ contract RebaseTokenBase is ERC20, Ownable {
         return super.balanceOf(_user);
     }
 
-    /// @notice Mints new tokens for a given address.
-    /// @param _account The address to mint the tokens to.
-    /// @param _value The number of tokens to mint.
-    /// @param _interestRate The interest rate of the user.
-    /// @dev this function increases the total supply.
-    function mint(address _account, uint256 _value, uint256 _interestRate) public virtual {
-        _beforeUpdate(address(0), _account);
-        _setUserInterestRate(_account, _interestRate);
-        _mint(_account, _value);
-    }
-
-    /// @notice Burns tokens from the sender.
-    /// @param _account The address to burn the tokens from.
-    /// @param _value The number of tokens to be burned
-    /// @dev this function decreases the total supply.
-    function burn(address _account, uint256 _value) public virtual {
-        _beforeUpdate(_account, address(0));
-        _burn(_account, _value);
-    }
-
     function transfer(address recipient, uint256 amount) public override returns (bool) {
         // accumulates the balance of the user so it is up to date with any interest accumulated.
         // also sets the user's accumulated rate (source token) or last updated timestamp (destination token)
@@ -145,6 +130,19 @@ contract RebaseTokenBase is ERC20, Ownable {
             _setUserInterestRate(recipient, s_interestRate);
         }
         return super.transferFrom(sender, recipient, amount);
+    }
+
+    /**
+     * @dev updates the interest rate. This is called only by the pool when a user bridges to this chain.
+     * @param _interestRate the new interest rate
+     * @notice this is called when a bridges tokens to this chain
+     *
+     */
+    function _setUserInterestRate(address _user, uint256 _interestRate) internal {
+        // needs to be called alongside _beforeUpdate to make sure the users last updated timestamp is set.
+        // update the user's interest rate
+        s_userInterestRate[_user] = _interestRate;
+        emit UserInterestRateUpdated(_user, _interestRate);
     }
 
     /**

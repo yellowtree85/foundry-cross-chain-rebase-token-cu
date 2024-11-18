@@ -12,8 +12,7 @@ import {IERC20} from "@ccip/contracts/src/v0.8/vendor/openzeppelin-solidity/v4.8
 import {IRouterClient} from "@ccip/contracts/src/v0.8/ccip/interfaces/IRouterClient.sol";
 import {Client} from "@ccip/contracts/src/v0.8/ccip/libraries/Client.sol";
 
-import {SourceRebaseToken} from "../src/SourceRebaseToken.sol";
-import {DestRebaseToken} from "../src/DestRebaseToken.sol";
+import {RebaseToken} from "../src/RebaseToken.sol";
 
 import {RebaseTokenPool} from "../src/RebaseTokenPool.sol";
 
@@ -34,8 +33,8 @@ contract CrossChainTest is Test {
     uint256 sepoliaFork;
     uint256 arbSepoliaFork;
 
-    DestRebaseToken destRebaseToken;
-    SourceRebaseToken sourceRebaseToken;
+    RebaseToken destRebaseToken;
+    RebaseToken sourceRebaseToken;
 
     RebaseTokenPool destPool;
     RebaseTokenPool sourcePool;
@@ -71,7 +70,7 @@ contract CrossChainTest is Test {
         //(sourceRebaseToken, sourcePool, vault) = sourceDeployer.run(owner);
         sepoliaNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
         vm.startPrank(owner);
-        sourceRebaseToken = new SourceRebaseToken();
+        sourceRebaseToken = new RebaseToken();
         console.log("source rebase token address");
         console.log(address(sourceRebaseToken));
         console.log("Deploying token pool on Sepolia");
@@ -86,7 +85,8 @@ contract CrossChainTest is Test {
         // add rewards to the vault
         vm.deal(address(vault), 1e18);
         // Set pool on the token contract for permissions on Sepolia
-        sourceRebaseToken.setVaultAndPool(address(vault), address(sourcePool));
+        sourceRebaseToken.grantRole(sourceRebaseToken.MINT_AND_BURN_ROLE(), address(sourcePool));
+        sourceRebaseToken.grantRole(sourceRebaseToken.MINT_AND_BURN_ROLE(), address(vault));
         // Claim role on Sepolia
         registryModuleOwnerCustomSepolia =
             RegistryModuleOwnerCustom(sepoliaNetworkDetails.registryModuleOwnerCustomAddress);
@@ -104,7 +104,7 @@ contract CrossChainTest is Test {
         vm.startPrank(owner);
         console.log("Deploying token on Arbitrum");
         arbSepoliaNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
-        destRebaseToken = new DestRebaseToken();
+        destRebaseToken = new RebaseToken();
         console.log("dest rebase token address");
         console.log(address(destRebaseToken));
         // Deploy the token pool on Arbitrum
@@ -116,7 +116,7 @@ contract CrossChainTest is Test {
             arbSepoliaNetworkDetails.routerAddress
         );
         // Set pool on the token contract for permissions on Arbitrum
-        destRebaseToken.setPool(address(destPool));
+        destRebaseToken.grantRole(destRebaseToken.MINT_AND_BURN_ROLE(), address(destPool));
         // Claim role on Arbitrum
         registryModuleOwnerCustomarbSepolia =
             RegistryModuleOwnerCustom(arbSepoliaNetworkDetails.registryModuleOwnerCustomAddress);

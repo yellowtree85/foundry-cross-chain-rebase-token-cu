@@ -3,13 +3,13 @@ pragma solidity 0.8.24;
 
 import {console, Test} from "forge-std/Test.sol";
 
-import {SourceRebaseToken} from "../src/SourceRebaseToken.sol";
+import {RebaseToken} from "../src/RebaseToken.sol";
 import {Vault} from "../src/Vault.sol";
 
 import {IRebaseToken} from "../src/interfaces/IRebaseToken.sol";
 
 contract RebaseTokenTest is Test {
-    SourceRebaseToken public rebaseToken;
+    RebaseToken public rebaseToken;
     Vault public vault;
     address public sourcePool; // don't really need this in this test but it's fine
 
@@ -24,10 +24,11 @@ contract RebaseTokenTest is Test {
 
     function setUp() public {
         vm.startPrank(owner);
-        rebaseToken = new SourceRebaseToken();
+        rebaseToken = new RebaseToken();
         vault = new Vault(IRebaseToken(address(rebaseToken)));
         sourcePool = makeAddr("pool");
-        rebaseToken.setVaultAndPool(address(vault), address(sourcePool));
+        rebaseToken.grantRole(rebaseToken.MINT_AND_BURN_ROLE(), sourcePool);
+        rebaseToken.grantRole(rebaseToken.MINT_AND_BURN_ROLE(), address(vault));
         vm.stopPrank();
     }
 

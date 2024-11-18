@@ -1,5 +1,7 @@
 # Cross-Chain Rebase Token
 
+CHANGE TO HAVE ADMIN ROLES!!! THEN ONLY NEED ONE TOKEN CONTRACT!!!
+
 WHATEVER INTEREST THEY DEPOSIT WITH, THEY STICK WITH
 
 This project is a cross-chain rebase token that integrates Chainlink CCIP to enable users to bridge their tokens cross-chain

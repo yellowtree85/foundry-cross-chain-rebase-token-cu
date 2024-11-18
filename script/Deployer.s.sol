@@ -6,32 +6,21 @@ import {CCIPLocalSimulatorFork, Register} from "@chainlink/local/src/ccip/CCIPLo
 import {RegistryModuleOwnerCustom} from "@ccip/contracts/src/v0.8/ccip/tokenAdminRegistry/RegistryModuleOwnerCustom.sol";
 import {TokenAdminRegistry} from "@ccip/contracts/src/v0.8/ccip/tokenAdminRegistry/TokenAdminRegistry.sol";
 import {IERC20} from "@ccip/contracts/src/v0.8/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
+import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
-import {SourceRebaseToken} from "../src/SourceRebaseToken.sol";
-import {DestRebaseToken} from "../src/DestRebaseToken.sol";
+import {RebaseToken} from "../src/RebaseToken.sol";
 import {IRebaseToken} from "../src/interfaces/IRebaseToken.sol";
 import {RebaseTokenPool} from "../src/RebaseTokenPool.sol";
 import {Vault} from "../src/Vault.sol";
 
-contract SourceDeployer is Script {
+contract TokenDeployer is Script {
     CCIPLocalSimulatorFork public ccipLocalSimulatorFork;
     Register.NetworkDetails networkDetails;
 
     RegistryModuleOwnerCustom registryModuleOwnerCustom;
     TokenAdminRegistry tokenAdminRegistry;
 
-    // function setUp() public {
-    //     ccipLocalSimulatorFork = new CCIPLocalSimulatorFork();
-    //     networkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
-
-    //     registryModuleOwnerCustom = RegistryModuleOwnerCustom(networkDetails.registryModuleOwnerCustomAddress);
-    //     tokenAdminRegistry = TokenAdminRegistry(networkDetails.tokenAdminRegistryAddress);
-    // }
-
-    function run(address owner)
-        public
-        returns (SourceRebaseToken sourceToken, RebaseTokenPool sourcePool, Vault vault)
-    {
+    function run() public returns (RebaseToken token, RebaseTokenPool pool) {
         // NOTE: what can I do instead of this by making it interactive? Do I even need this line if I'm using a wallet for this?
         //uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         // NOTE: in the test I have already done this though? Is this a problem
@@ -40,75 +29,46 @@ contract SourceDeployer is Script {
 
         registryModuleOwnerCustom = RegistryModuleOwnerCustom(networkDetails.registryModuleOwnerCustomAddress);
         tokenAdminRegistry = TokenAdminRegistry(networkDetails.tokenAdminRegistryAddress);
-        vm.startBroadcast(owner);
+        vm.startBroadcast();
 
         // Step 1) Deploy token
-        sourceToken = new SourceRebaseToken();
+        token = new RebaseToken();
 
-        // Step 2) Deploy SourcePool
+        // Step 2) Deploy pool
         address[] memory allowlist = new address[](0);
-        sourcePool = new RebaseTokenPool(
-            IERC20(address(sourceToken)), allowlist, networkDetails.rmnProxyAddress, networkDetails.routerAddress
+        pool = new RebaseTokenPool(
+            IERC20(address(token)), allowlist, networkDetails.rmnProxyAddress, networkDetails.routerAddress
         );
 
-        vault = new Vault(IRebaseToken(address(sourceToken)));
-
-        // Step 3) set the vault and pool for the token
-        sourceToken.setVaultAndPool(address(sourcePool), address(vault));
+        token.grantRole(token.MINT_AND_BURN_ROLE(), address(pool));
 
         // Step 4) Claim Admin role
-        registryModuleOwnerCustom.registerAdminViaOwner(address(sourceToken));
+        registryModuleOwnerCustom.registerAdminViaOwner(address(token));
 
         // Step 5) Accept Admin role
-        tokenAdminRegistry.acceptAdminRole(address(sourceToken));
+        tokenAdminRegistry.acceptAdminRole(address(token));
 
         // Step 6) Link token to pool
-        tokenAdminRegistry.setPool(address(sourceToken), address(sourcePool));
+        tokenAdminRegistry.setPool(address(token), address(pool));
 
         vm.stopBroadcast();
     }
 }
 
-contract DestDeployer is Script {
-    CCIPLocalSimulatorFork public ccipLocalSimulatorFork;
-    Register.NetworkDetails networkDetails;
+// Only on the source chain!
+contract VaultDeployer is Script {
+    bytes32 public constant MINT_AND_BURN_ROLE = keccak256("MINT_AND_BURN_ROLE");
 
-    RegistryModuleOwnerCustom registryModuleOwnerCustom;
-    TokenAdminRegistry tokenAdminRegistry;
-
-    function setUp() public {
-        ccipLocalSimulatorFork = new CCIPLocalSimulatorFork();
-        networkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
-
-        registryModuleOwnerCustom = RegistryModuleOwnerCustom(networkDetails.registryModuleOwnerCustomAddress);
-        tokenAdminRegistry = TokenAdminRegistry(networkDetails.tokenAdminRegistryAddress);
-    }
-
-    function run() public returns (DestRebaseToken destToken, RebaseTokenPool destPool) {
+    function run(address _rebaseToken) public returns (Vault vault) {
         // NOTE: what can I do instead of this by making it interactive? Do I even need this line if I'm using a wallet for this?
         //uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast();
 
-        // Step 1) Deploy token
-        destToken = new DestRebaseToken();
+        // Step 1) Deploy the vault
+        vault = new Vault(IRebaseToken(_rebaseToken));
 
-        // Step 2) Deploy pool
-        address[] memory allowlist = new address[](0);
-        destPool = new RebaseTokenPool(
-            IERC20(address(destToken)), allowlist, networkDetails.rmnProxyAddress, networkDetails.routerAddress
-        );
-
-        // Step 3) set pool on the token contract for permissions
-        destToken.setPool(address(destPool));
-
-        // Step 4) Claim Admin role
-        registryModuleOwnerCustom.registerAdminViaOwner(address(destToken));
-
-        // Step 5) Accept Admin role
-        tokenAdminRegistry.acceptAdminRole(address(destToken));
-
-        // Step 6) Link token to pool in the token admin registry
-        tokenAdminRegistry.setPool(address(destToken), address(destPool));
+        // Step 2) Claim burn and mint role
+        IAccessControl(_rebaseToken).grantRole(MINT_AND_BURN_ROLE, address(vault));
 
         vm.stopBroadcast();
     }

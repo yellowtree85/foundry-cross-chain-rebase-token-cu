@@ -6,7 +6,6 @@ import {CCIPLocalSimulatorFork, Register} from "@chainlink/local/src/ccip/CCIPLo
 import {RegistryModuleOwnerCustom} from "@ccip/contracts/src/v0.8/ccip/tokenAdminRegistry/RegistryModuleOwnerCustom.sol";
 import {TokenAdminRegistry} from "@ccip/contracts/src/v0.8/ccip/tokenAdminRegistry/TokenAdminRegistry.sol";
 import {IERC20} from "@ccip/contracts/src/v0.8/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
-import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 import {RebaseToken} from "../src/RebaseToken.sol";
 import {IRebaseToken} from "../src/interfaces/IRebaseToken.sol";
@@ -19,6 +18,8 @@ contract TokenDeployer is Script {
 
     RegistryModuleOwnerCustom registryModuleOwnerCustom;
     TokenAdminRegistry tokenAdminRegistry;
+
+    bytes32 public constant MINT_AND_BURN_ROLE = keccak256("MINT_AND_BURN_ROLE");
 
     function run() public returns (RebaseToken token, RebaseTokenPool pool) {
         // NOTE: what can I do instead of this by making it interactive? Do I even need this line if I'm using a wallet for this?
@@ -40,7 +41,7 @@ contract TokenDeployer is Script {
             IERC20(address(token)), allowlist, networkDetails.rmnProxyAddress, networkDetails.routerAddress
         );
 
-        token.grantRole(token.MINT_AND_BURN_ROLE(), address(pool));
+        token.grantMintAndBurnRole(address(pool));
 
         // Step 4) Claim Admin role
         registryModuleOwnerCustom.registerAdminViaOwner(address(token));
@@ -68,7 +69,7 @@ contract VaultDeployer is Script {
         vault = new Vault(IRebaseToken(_rebaseToken));
 
         // Step 2) Claim burn and mint role
-        IAccessControl(_rebaseToken).grantRole(MINT_AND_BURN_ROLE, address(vault));
+        IRebaseToken(_rebaseToken).grantMintAndBurnRole(address(vault));
 
         vm.stopBroadcast();
     }

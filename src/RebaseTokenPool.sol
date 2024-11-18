@@ -15,6 +15,7 @@ contract RebaseTokenPool is TokenPool {
         TokenPool(token, allowlist, rmnProxy, router)
     {}
 
+    /// @notice burns the tokens on the source chain
     function lockOrBurn(Pool.LockOrBurnInV1 calldata lockOrBurnIn)
         external
         virtual
@@ -47,7 +48,6 @@ contract RebaseTokenPool is TokenPool {
         // Mint rebasing tokens to the receiver on the destination chain
         // This will also mint any interest that has accrued since the last time the user's balance was updated.
         IRebaseToken(address(i_token)).mint(receiver, releaseOrMintIn.amount, userInterestRate);
-        // This needs to be set after otherwise any pending interst that has not yet been minted will be lost.
         IRebaseToken(address(i_token)).setInterestRate(userInterestRate);
 
         return Pool.ReleaseOrMintOutV1({destinationAmount: releaseOrMintIn.amount});

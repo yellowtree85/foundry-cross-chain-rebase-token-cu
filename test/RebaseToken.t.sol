@@ -27,8 +27,7 @@ contract RebaseTokenTest is Test {
         rebaseToken = new RebaseToken();
         vault = new Vault(IRebaseToken(address(rebaseToken)));
         sourcePool = makeAddr("pool");
-        rebaseToken.grantRole(rebaseToken.MINT_AND_BURN_ROLE(), sourcePool);
-        rebaseToken.grantRole(rebaseToken.MINT_AND_BURN_ROLE(), address(vault));
+        rebaseToken.grantMintAndBurnRole(address(vault));
         vm.stopPrank();
     }
 

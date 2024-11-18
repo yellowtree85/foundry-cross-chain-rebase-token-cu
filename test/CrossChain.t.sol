@@ -85,8 +85,8 @@ contract CrossChainTest is Test {
         // add rewards to the vault
         vm.deal(address(vault), 1e18);
         // Set pool on the token contract for permissions on Sepolia
-        sourceRebaseToken.grantRole(sourceRebaseToken.MINT_AND_BURN_ROLE(), address(sourcePool));
-        sourceRebaseToken.grantRole(sourceRebaseToken.MINT_AND_BURN_ROLE(), address(vault));
+        sourceRebaseToken.grantMintAndBurnRole(address(sourcePool));
+        sourceRebaseToken.grantMintAndBurnRole(address(vault));
         // Claim role on Sepolia
         registryModuleOwnerCustomSepolia =
             RegistryModuleOwnerCustom(sepoliaNetworkDetails.registryModuleOwnerCustomAddress);
@@ -116,7 +116,7 @@ contract CrossChainTest is Test {
             arbSepoliaNetworkDetails.routerAddress
         );
         // Set pool on the token contract for permissions on Arbitrum
-        destRebaseToken.grantRole(destRebaseToken.MINT_AND_BURN_ROLE(), address(destPool));
+        destRebaseToken.grantMintAndBurnRole(address(destPool));
         // Claim role on Arbitrum
         registryModuleOwnerCustomarbSepolia =
             RegistryModuleOwnerCustom(arbSepoliaNetworkDetails.registryModuleOwnerCustomAddress);

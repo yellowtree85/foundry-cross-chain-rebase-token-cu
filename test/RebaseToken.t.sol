@@ -179,7 +179,7 @@ contract RebaseTokenTest is Test {
         // check their interest rates are as expected
         // since user two hadn't minted before, their interest rate should be the same as in the contract
         uint256 userTwoInterestRate = rebaseToken.getUserInterestRate(userTwo);
-        assertEq(userTwoInterestRate, 4e10);
+        assertEq(userTwoInterestRate, 5e10);
         // since user had minted before, their interest rate should be the previous interest rate
         uint256 userInterestRate = rebaseToken.getUserInterestRate(user);
         assertEq(userInterestRate, 5e10);

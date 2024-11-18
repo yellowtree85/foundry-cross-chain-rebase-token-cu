@@ -48,7 +48,6 @@ contract RebaseTokenPool is TokenPool {
         // Mint rebasing tokens to the receiver on the destination chain
         // This will also mint any interest that has accrued since the last time the user's balance was updated.
         IRebaseToken(address(i_token)).mint(receiver, releaseOrMintIn.amount, userInterestRate);
-        IRebaseToken(address(i_token)).setInterestRate(userInterestRate);
 
         return Pool.ReleaseOrMintOutV1({destinationAmount: releaseOrMintIn.amount});
     }

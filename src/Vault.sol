@@ -9,6 +9,8 @@ contract Vault {
     event Deposit(address indexed user, uint256 amount);
     event Redeem(address indexed user, uint256 amount);
 
+    error Vault__RedeemFailed();
+
     constructor(IRebaseToken _rebaseToken) {
         i_rebaseToken = _rebaseToken;
     }
@@ -30,7 +32,10 @@ contract Vault {
         i_rebaseToken.burn(msg.sender, _amount);
 
         // executes redeem of the underlying asset
-        payable(msg.sender).transfer(_amount);
+        (bool success,) = payable(msg.sender).call{value: _amount}("");
+        if (!success) {
+            revert Vault__RedeemFailed();
+        }
         emit Redeem(msg.sender, _amount);
     }
 }

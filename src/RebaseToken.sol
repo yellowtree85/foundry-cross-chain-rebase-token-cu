@@ -54,7 +54,7 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
      * @param _interestRate the new interest rate
      *
      */
-    function setInterestRate(uint256 _interestRate) external onlyRole(MINT_AND_BURN_ROLE) {
+    function setInterestRate(uint256 _interestRate) external onlyRole(DEFAULT_ADMIN_ROLE) {
         // O
         if (_interestRate < s_interestRate) {
             // if this is coming from the destination chain, this wont be updated since it will be greater (or equal to) the current interest rate
@@ -126,7 +126,7 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
         _beforeUpdate(msg.sender, _recipient);
         if (balanceOf(_recipient) == 0) {
             // Update the users interest rate only if they have not yet got one (or they tranferred/burned all their tokens). Otherwise people could force others to have lower interest.
-            _setUserInterestRate(_recipient, s_interestRate);
+            _setUserInterestRate(_recipient, s_userInterestRate[msg.sender]);
         }
         return super.transfer(_recipient, _amount);
     }
@@ -144,7 +144,7 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
         _beforeUpdate(_sender, _recipient);
         if (balanceOf(_recipient) == 0) {
             // Update the users interest rate only if they have not yet got one (or they tranferred/burned all their tokens). Otherwise people could force others to have lower interest.
-            _setUserInterestRate(_recipient, s_interestRate);
+            _setUserInterestRate(_recipient, s_userInterestRate[_sender]);
         }
         return super.transferFrom(_sender, _recipient, _amount);
     }

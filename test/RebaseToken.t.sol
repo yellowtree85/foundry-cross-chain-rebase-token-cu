@@ -141,15 +141,16 @@ contract RebaseTokenTest is Test {
         vm.stopPrank();
     }
 
+    function testAmount(uint256 amount) public {
+        amount = bound(amount, 1e3, type(uint96).max);
+        vm.deal(user, amount);
+        vm.prank(user);
+        vault.deposit{value: amount}();
+    }
+
     function testTransfer(uint256 amount, uint256 amountToSend) public {
-        // Deposit funds
-        //uint256 amount = 1e5;
-        //uint256 amountToSend = 5e4;
-        // do this assume to avoid overflow
-        vm.assume(amount < type(uint96).max);
-        vm.assume(amountToSend < type(uint96).max);
-        vm.assume(amount >= 1e3 + amountToSend);
-        vm.assume(amountToSend > 1e3);
+        amount = bound(amount, 1e5 + 1e3, type(uint96).max);
+        amountToSend = bound(amountToSend, 1e5, amount - 1e3);
 
         vm.deal(user, amount);
         vm.prank(user);

@@ -127,7 +127,7 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
     function transfer(address _recipient, uint256 _amount) public override returns (bool) {
         // accumulates the balance of the user so it is up to date with any interest accumulated.
         if (_amount == type(uint256).max) {
-            _amount = balanceOf(_account);
+            _amount = balanceOf(msg.sender);
         }
         _beforeUpdate(msg.sender, _recipient);
         if (balanceOf(_recipient) == 0) {
@@ -147,7 +147,7 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
      */
     function transferFrom(address _sender, address _recipient, uint256 _amount) public override returns (bool) {
         if (_amount == type(uint256).max) {
-            _amount = balanceOf(_account);
+            _amount = balanceOf(_sender);
         }
         // accumulates the balance of the user so it is up to date with any interest accumulated.
         _beforeUpdate(_sender, _recipient);

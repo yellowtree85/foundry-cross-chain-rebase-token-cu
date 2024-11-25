@@ -25,8 +25,8 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
     // Events
     /////////////////////
     event UserInterestRateUpdated(address indexed user, uint256 newUserInterestRate);
-    event ToInterestAccrued(address user, uint256 balance);
-    event FromInterestAccrued(address user, uint256 balance);
+    event ToInterestAccrued(address indexed user, uint256 balance);
+    event FromInterestAccrued(address indexed user, uint256 balance);
     event InterestRateUpdated(uint256 newInterestRate);
 
     constructor() Ownable(msg.sender) ERC20("RebaseToken", "RBT") {
@@ -93,6 +93,9 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
     /// @dev this function decreases the total supply.
     function burn(address _account, uint256 _value) public onlyRole(MINT_AND_BURN_ROLE) {
         // Mints any existing interest that has accrued since the last time the user's balance was updated.
+        if (_value == type(uint256).max) {
+            _value = balanceOf(_account);
+        }
         _beforeUpdate(_account, address(0));
         _burn(_account, _value);
     }
@@ -123,6 +126,9 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
      */
     function transfer(address _recipient, uint256 _amount) public override returns (bool) {
         // accumulates the balance of the user so it is up to date with any interest accumulated.
+        if (_amount == type(uint256).max) {
+            _amount = balanceOf(_account);
+        }
         _beforeUpdate(msg.sender, _recipient);
         if (balanceOf(_recipient) == 0) {
             // Update the users interest rate only if they have not yet got one (or they tranferred/burned all their tokens). Otherwise people could force others to have lower interest.
@@ -140,6 +146,9 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
      *
      */
     function transferFrom(address _sender, address _recipient, uint256 _amount) public override returns (bool) {
+        if (_amount == type(uint256).max) {
+            _amount = balanceOf(_account);
+        }
         // accumulates the balance of the user so it is up to date with any interest accumulated.
         _beforeUpdate(_sender, _recipient);
         if (balanceOf(_recipient) == 0) {
@@ -197,7 +206,7 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
         _mint(_user, balanceIncrease);
         // Update the user's last updated timestamp to reflect this most recent time their interest was minted to them.
         s_userLastUpdatedTimestamp[_user] = block.timestamp;
-        return (currentBalance);
+        return currentBalance;
     }
 
     /**
@@ -211,17 +220,12 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
             // we are burning or transferring tokens
             // mint any accrued interest since the last time the user's balance was updated
             (uint256 fromBalance) = _mintAccruedInterest(_from);
-            // NOTE: do I need to do this? It would break stuff in getting the users interest rate when bridging tbh
-            // if (fromBalance - _value == 0) {
-            //     s_userInterestRate[_from] = 0;
-            //     s_userLastUpdatedTimestamp[_from] = 0;
-            // }
             emit FromInterestAccrued(_from, fromBalance);
         }
         if (_to != address(0)) {
             // we are minting or transferring tokens
             // mint any accrued interest since the last time the user's balance was updated
-            (uint256 toBalance) = _mintAccruedInterest(_to);
+            uint256 toBalance = _mintAccruedInterest(_to);
             emit ToInterestAccrued(_to, toBalance);
         }
     }

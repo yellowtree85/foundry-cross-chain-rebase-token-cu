@@ -29,6 +29,9 @@ contract Vault {
      *
      */
     function redeem(uint256 _amount) external {
+        // Special logic to account for dust when redeeming entire balance
+        // _amount =
+        //     _amount > i_rebaseToken.balanceOf(msg.sender) ? i_rebaseToken.balanceOf(msg.sender) : _amount;
         i_rebaseToken.burn(msg.sender, _amount);
 
         // executes redeem of the underlying asset

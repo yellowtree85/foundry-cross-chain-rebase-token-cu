@@ -67,14 +67,15 @@ contract RebaseTokenTest is Test {
         vm.stopPrank();
     }
 
-    function testRedeemStraightAway() public {
+    function testRedeemStraightAway(uint256 amount) public {
+        amount = bound(amount, 1e5, type(uint96).max);
         // Deposit funds
         vm.startPrank(user);
-        vm.deal(user, SEND_VALUE);
-        vault.deposit{value: SEND_VALUE}();
+        vm.deal(user, amount);
+        vault.deposit{value: amount}();
 
         // Redeem funds
-        vault.redeem(SEND_VALUE);
+        vault.redeem(amount);
 
         uint256 balance = rebaseToken.balanceOf(user);
         console.log("User balance: %d", balance);
@@ -83,10 +84,8 @@ contract RebaseTokenTest is Test {
     }
 
     function testRedeemAfterTimeHasPassed(uint256 depositAmount, uint256 time) public {
-        vm.assume(depositAmount > 1e5);
-        vm.assume(time > 100);
+        time = bound(time, 1000, type(uint96).max); // this is a crazy number of years - 2^96 seconds is a lot
         depositAmount = bound(depositAmount, 1e5, type(uint96).max); // this is an Ether value of max 2^78 which is crazy
-        time = bound(time, 100, type(uint96).max); // this is 2.5 * 10^21 years... so yeah if the fuzz test passes, we goooood
 
         // Deposit funds
         vm.deal(user, depositAmount);
@@ -141,7 +140,7 @@ contract RebaseTokenTest is Test {
         vm.stopPrank();
     }
 
-    function testAmount(uint256 amount) public {
+    function testDeposit(uint256 amount) public {
         amount = bound(amount, 1e3, type(uint96).max);
         vm.deal(user, amount);
         vm.prank(user);

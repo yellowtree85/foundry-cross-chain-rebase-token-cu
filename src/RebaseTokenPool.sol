@@ -12,7 +12,7 @@ contract RebaseTokenPool is TokenPool {
     event Redeem(address indexed user, uint256 amount);
 
     constructor(IERC20 token, address[] memory allowlist, address rmnProxy, address router)
-        TokenPool(token, allowlist, rmnProxy, router)
+        TokenPool(token, 18, allowlist, rmnProxy, router)
     {}
 
     /// @notice burns the tokens on the source chain

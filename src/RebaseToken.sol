@@ -190,13 +190,13 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
      * @return currentBalance users new balance
      *
      */
-    function _mintAccruedInterest(address _user) internal {
+    function _mintAccruedInterest(address _user) internal returns (uint256 currentBalance) {
         // Get the user's previous principal balance. The amount of tokens they had last time their interest was minted to them.
         uint256 previousPrincipalBalance = super.balanceOf(_user);
 
         // Calculate the accrued interest since the last accumulation
         // `balanceOf` uses the user's interest rate and the time since their last update to get the updated balance
-        uint256 currentBalance = balanceOf(_user);
+        currentBalance = balanceOf(_user);
         uint256 balanceIncrease = currentBalance - previousPrincipalBalance;
 
         // Mint an amount of tokens equivalent to the interest accrued

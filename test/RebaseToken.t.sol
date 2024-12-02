@@ -19,7 +19,7 @@ contract RebaseTokenTest is Test {
 
     function addRewardsToVault(uint256 amount) public {
         // send some rewards to the vault using the receive function
-        payable(address(vault)).transfer(amount);
+        payable(address(vault)).call{value: amount}("");
     }
 
     function setUp() public {
@@ -31,7 +31,7 @@ contract RebaseTokenTest is Test {
         vm.stopPrank();
     }
 
-    function testDeposit() public {
+    function testDepositLinear() public {
         // Deposit funds
         vm.startPrank(user);
         vm.deal(user, SEND_VALUE);

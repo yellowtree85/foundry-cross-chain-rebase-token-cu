@@ -6,8 +6,7 @@ import {TokenPool} from "@ccip/contracts/src/v0.8/ccip/pools/BurnMintTokenPool.s
 import {RateLimiter} from "@ccip/contracts/src/v0.8/ccip/libraries/RateLimiter.sol";
 
 contract ConfigurePoolScript is Script {
-    function run(
-        address ccipChainPoolAddress,
+    function createChainUpdateObject(
         uint64 remoteChainSelector,
         address remotePoolAddress,
         address remoteTokenAddress,
@@ -17,13 +16,7 @@ contract ConfigurePoolScript is Script {
         bool inboundRateLimiterIsEnabled,
         uint128 inboundRateLimiterCapacity,
         uint128 inboundRateLimiterRate
-    ) public {
-        // NOTE: what can I do instead of this by making it interactive? Do I even need this line if I'm using a wallet for this?
-        //uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        vm.startBroadcast();
-
-        TokenPool tokenPool = TokenPool(ccipChainPoolAddress);
-
+    ) public pure returns (TokenPool.ChainUpdate[] memory) {
         TokenPool.ChainUpdate[] memory chains = new TokenPool.ChainUpdate[](1);
         chains[0] = TokenPool.ChainUpdate({
             remoteChainSelector: remoteChainSelector,
@@ -41,7 +34,35 @@ contract ConfigurePoolScript is Script {
                 rate: inboundRateLimiterRate
             })
         });
+        return chains;
+    }
 
+    function run(
+        address ccipChainPoolAddress,
+        uint64 remoteChainSelector,
+        address remotePoolAddress,
+        address remoteTokenAddress,
+        bool outboundRateLimiterIsEnabled,
+        uint128 outboundRateLimiterCapacity,
+        uint128 outboundRateLimiterRate,
+        bool inboundRateLimiterIsEnabled,
+        uint128 inboundRateLimiterCapacity,
+        uint128 inboundRateLimiterRate
+    ) public {
+        vm.startBroadcast();
+
+        TokenPool tokenPool = TokenPool(ccipChainPoolAddress);
+        TokenPool.ChainUpdate[] memory chains = createChainUpdateObject(
+            remoteChainSelector,
+            remotePoolAddress,
+            remoteTokenAddress,
+            outboundRateLimiterIsEnabled,
+            outboundRateLimiterCapacity,
+            outboundRateLimiterRate,
+            inboundRateLimiterIsEnabled,
+            inboundRateLimiterCapacity,
+            inboundRateLimiterRate
+        );
         tokenPool.applyChainUpdates(chains);
 
         vm.stopBroadcast();

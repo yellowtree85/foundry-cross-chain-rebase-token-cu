@@ -30,7 +30,6 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
     event InterestRateUpdated(uint256 newInterestRate);
 
     constructor() Ownable(msg.sender) ERC20("RebaseToken", "RBT") {
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(MINT_AND_BURN_ROLE, msg.sender); // so that the owner can update the interest rate
     }
 
@@ -51,11 +50,9 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
      * @dev sets the interest rate of the token. This is only called by the protocol owner.
      * @param _interestRate the new interest rate
      * @notice only allow the interest rate to decrease but we don't want it to revert in case it's the destination chain that is updating the interest rate (in which case it'll either be the same or larger so it won't update)
-     * @param _interestRate the new interest rate
      *
      */
-    function setInterestRate(uint256 _interestRate) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        // O
+    function setInterestRate(uint256 _interestRate) external onlyOwner {
         if (_interestRate < s_interestRate) {
             // if this is coming from the destination chain, this wont be updated since it will be greater (or equal to) the current interest rate
             s_interestRate = _interestRate;
@@ -193,7 +190,7 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
      * @return currentBalance users new balance
      *
      */
-    function _mintAccruedInterest(address _user) internal returns (uint256) {
+    function _mintAccruedInterest(address _user) internal {
         // Get the user's previous principal balance. The amount of tokens they had last time their interest was minted to them.
         uint256 previousPrincipalBalance = super.balanceOf(_user);
 
@@ -206,7 +203,6 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
         _mint(_user, balanceIncrease);
         // Update the user's last updated timestamp to reflect this most recent time their interest was minted to them.
         s_userLastUpdatedTimestamp[_user] = block.timestamp;
-        return currentBalance;
     }
 
     /**

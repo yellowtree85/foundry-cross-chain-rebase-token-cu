@@ -14,17 +14,12 @@ import {Vault} from "../src/Vault.sol";
 
 contract TokenDeployer is Script {
     CCIPLocalSimulatorFork public ccipLocalSimulatorFork;
-    Register.NetworkDetails networkDetails;
+    Register.NetworkDetails public networkDetails;
 
-    RegistryModuleOwnerCustom registryModuleOwnerCustom;
-    TokenAdminRegistry tokenAdminRegistry;
-
-    bytes32 public constant MINT_AND_BURN_ROLE = keccak256("MINT_AND_BURN_ROLE");
+    RegistryModuleOwnerCustom public registryModuleOwnerCustom;
+    TokenAdminRegistry public tokenAdminRegistry;
 
     function run() public returns (RebaseToken token, RebaseTokenPool pool) {
-        // NOTE: what can I do instead of this by making it interactive? Do I even need this line if I'm using a wallet for this?
-        //uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        // NOTE: in the test I have already done this though? Is this a problem
         ccipLocalSimulatorFork = new CCIPLocalSimulatorFork();
         networkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
 
@@ -58,8 +53,6 @@ contract TokenDeployer is Script {
 
 // Only on the source chain!
 contract VaultDeployer is Script {
-    bytes32 public constant MINT_AND_BURN_ROLE = keccak256("MINT_AND_BURN_ROLE");
-
     function run(address _rebaseToken) public returns (Vault vault) {
         // NOTE: what can I do instead of this by making it interactive? Do I even need this line if I'm using a wallet for this?
         //uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");

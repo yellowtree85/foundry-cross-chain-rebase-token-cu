@@ -145,16 +145,8 @@ contract CrossChainTest is Test {
             allowed: true,
             remotePoolAddress: abi.encode(address(remotePool)),
             remoteTokenAddress: abi.encode(address(remoteToken)),
-            outboundRateLimiterConfig: RateLimiter.Config({
-                isEnabled: true,
-                capacity: 20000000000000000000,
-                rate: 100000000000000000
-            }),
-            inboundRateLimiterConfig: RateLimiter.Config({
-                isEnabled: true,
-                capacity: 20000000000000000000,
-                rate: 100000000000000000
-            })
+            outboundRateLimiterConfig: RateLimiter.Config({isEnabled: false, capacity: 0, rate: 0}),
+            inboundRateLimiterConfig: RateLimiter.Config({isEnabled: false, capacity: 0, rate: 0})
         });
         localPool.applyChainUpdates(chains);
         vm.stopPrank();

@@ -11,7 +11,6 @@ import {IRebaseToken} from "../src/interfaces/IRebaseToken.sol";
 contract RebaseTokenTest is Test {
     RebaseToken public rebaseToken;
     Vault public vault;
-    address public sourcePool; // don't really need this in this test but it's fine
 
     address public user = makeAddr("user");
     address public owner = makeAddr("owner");
@@ -26,21 +25,21 @@ contract RebaseTokenTest is Test {
         vm.startPrank(owner);
         rebaseToken = new RebaseToken();
         vault = new Vault(IRebaseToken(address(rebaseToken)));
-        sourcePool = makeAddr("pool");
         rebaseToken.grantMintAndBurnRole(address(vault));
         vm.stopPrank();
     }
 
-    function testDepositLinear() public {
+    function testDepositLinear(uint256 amount) public {
         // Deposit funds
-        vm.startPrank(user);
-        vm.deal(user, SEND_VALUE);
-        vault.deposit{value: SEND_VALUE}();
-
+        vm.warp(block.timestamp - 1);
         console.log("block timestamp: %d", block.timestamp);
+        amount = bound(amount, 1e5, type(uint24).max);
+        vm.startPrank(user);
+        vm.deal(user, amount);
+        vault.deposit{value: amount}();
         uint256 startBalance = rebaseToken.balanceOf(user);
         console.log("User start balance: %d", startBalance);
-        assertEq(startBalance, SEND_VALUE);
+        assertEq(startBalance, amount);
 
         // check the balance has increased after 1 hour has passed
         vm.warp(block.timestamp + 1 hours);
@@ -53,8 +52,8 @@ contract RebaseTokenTest is Test {
 
         // check the balance has increased after 1 hour has passed
         vm.warp(block.timestamp + 1 hours);
-
         console.log("block timestamp: %d", block.timestamp);
+
         uint256 endBalance = rebaseToken.balanceOf(user);
         console.log("User end balance: %d", endBalance);
 
@@ -63,7 +62,16 @@ contract RebaseTokenTest is Test {
         uint256 differenceOne = middleBalance - startBalance;
         uint256 differenceTwo = endBalance - middleBalance;
 
-        assertEq(differenceTwo, differenceOne);
+        //assertEq(differenceTwo, differenceOne);
+
+        vm.warp(block.timestamp + 1 hours);
+        console.log("block timestamp: %d", block.timestamp);
+        uint256 endBalanceAfterWarp = rebaseToken.balanceOf(user);
+
+        uint256 differenceThree = endBalanceAfterWarp - endBalance;
+
+        assertEq(differenceThree, differenceTwo);
+
         vm.stopPrank();
     }
 

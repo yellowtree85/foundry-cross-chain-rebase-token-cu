@@ -1,0 +1,37 @@
+#!/bin/bash
+DEFAULT_ZKSYNC_LOCAL_KEY="0x7726827caac94a7f9e1b160f7ea819f172f7b6f9d2a97f992c38edeab82d4110"
+DEFAULT_ZKSYNC_ADDRESS="0x36615Cf349d7F6344891B1e7CA7C72883F5dc049"
+
+ZKSYNC_REGISTRY_MODULE_OWNER_CUSTOM="0x3139687Ee9938422F57933C3CDB3E21EE43c4d0F"
+ZKSYNC_TOKEN_ADMIN_REGISTRY="0xc7777f12258014866c677Bdb679D0b007405b7DF"
+ZKSYNC_ROUTER="0xA1fdA8aa9A8C4b945C45aD30647b01f07D7A0B16"
+ZKSYNC_RNM_PROXY_ADDRESS="0x3DA20FD3D8a8f8c1f1A5fD03648147143608C467"
+ZKSYNC_SEPOLIA_CHAIN_SELECTOR="6898391096552792247"
+ZKSYNC_LINK_ADDRESS="0x23A1aFD896c8c8876AF46aDc38521f4432658d1e"
+ZKSYNC_SEPOLIA_RPC_URL="https://sepolia.era.zksync.dev"
+
+SEPOLIA_REGISTRY_MODULE_OWNER_CUSTOM="0x62e731218d0D47305aba2BE3751E7EE9E5520790"
+SEPOLIA_TOKEN_ADMIN_REGISTRY="0x95F29FEE11c5C55d26cCcf1DB6772DE953B37B82"
+SEPOLIA_ROUTER="0x0BF3dE8c5D3e8A2B34D2BEeB17ABfCeBaf363A59"
+SEPOLIA_RNM_PROXY_ADDRESS="0xba3f6251de62dED61Ff98590cB2fDf6871FbB991"
+SEPOLIA_CHAIN_SELECTOR="16015286601757825753"
+SEPOLIA_LINK_ADDRESS="0x779877A7B0D9E8603169DdbD7836e478b4624789"
+SEPOLIA_RPC_URL="https://eth-sepolia.g.alchemy.com/v2/mwHkM74gwkO6kdWQKCYBRWdbDUnhZB7E"
+# 3. On ZKsync!
+
+# Configure the pool on ZKsync
+echo "Configuring the pool on ZKsync..."
+cast send ${ZKSYNC_POOL_ADDRESS} "applyChainUpdates(uint64[],(uint64,address[],address,(bool,uint128,uint128),(bool,uint128,uint128))[])" [] [(${SEPOLIA_CHAIN_SELECTOR},[${SEPOLIA_POOL_ADDRESS}],${SEPOLIA_REBASE_TOKEN_ADDRESS},(false,0,0),(false,0,0))] --rpc-url ${ZKSYNC_SEPOLIA_RPC_URL} --account updraft 
+
+# Check balance on ZKsync Sepolia
+ZKSYNC_BALANCE=$(cast balance $(cast wallet address --account updraft) --erc20 ${ZKSYNC_REBASE_TOKEN_ADDRESS} --rpc-url ${ZKSYNC_SEPOLIA_RPC_URL})
+echo "ZKsync balance: $ZKSYNC_BALANCE"
+
+# Bridge back to Sepolia
+cast send ${ZKSYNC_ROUTER} "ccipSend(uint64,(bytes,bytes,(address,uint256)[]))" ${SEPOLIA_CHAIN_SELECTOR} ($(cast keccak $(cast wallet address --account updraft)),"",[(${ZKSYNC_REBASE_TOKEN_ADDRESS},$(cast max-uint))])
+
+# 4. On Sepolia!
+
+# Withdraw funds from the vault
+echo "Withdrawing funds from the vault..."
+forge script ./script/Interactions.s.sol:WithdrawScript --rpc-url ${SEPOLIA_RPC_URL} --account updraft --broadcast --sig "run(address)" ${VAULT_ADDRESS}

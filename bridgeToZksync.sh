@@ -1,19 +1,5 @@
 #!/bin/bash
 
-# s_networkDetails[300] = NetworkDetails({
-#             chainSelector: 6898391096552792247,
-#             routerAddress: 0xA1fdA8aa9A8C4b945C45aD30647b01f07D7A0B16,
-#             linkAddress: 0x23A1aFD896c8c8876AF46aDc38521f4432658d1e,
-#             wrappedNativeAddress: 0x4317b2eCD41851173175005783322D29E9bAee9E,
-#             ccipBnMAddress: 0xFf6d0c1518A8104611f482eb2801CaF4f13c9dEb,
-#             ccipLnMAddress: 0xBf8eA19505ab7Eb266aeD435B11bd56321BFB5c5,
-#             rmnProxyAddress: 0x3DA20FD3D8a8f8c1f1A5fD03648147143608C467,
-#             registryModuleOwnerCustomAddress: 0x3139687Ee9938422F57933C3CDB3E21EE43c4d0F,
-#             tokenAdminRegistryAddress: 0xc7777f12258014866c677Bdb679D0b007405b7DF
-#         });
-
-# 1. On ZKsync Sepolia!
-
 # Define constants 
 ALLOWLIST="[]" # empty array
 
@@ -37,6 +23,7 @@ SEPOLIA_LINK_ADDRESS="0x779877A7B0D9E8603169DdbD7836e478b4624789"
 SEPOLIA_RPC_URL="https://eth-sepolia.g.alchemy.com/v2/mwHkM74gwkO6kdWQKCYBRWdbDUnhZB7E"
 
 # Compile and deploy the Rebase Token contract
+forge build --zksync
 echo "Compiling and deploying the Rebase Token contract..."
 ZKSYNC_REBASE_TOKEN_ADDRESS=$(forge create src/RebaseToken.sol:RebaseToken --rpc-url ${ZKSYNC_SEPOLIA_RPC_URL} --account updraft --legacy --zksync | awk '/Deployed to:/ {print $3}')
 echo "ZKsync rebase token address: $ZKSYNC_REBASE_TOKEN_ADDRESS"
@@ -91,31 +78,17 @@ forge script ./script/ConfigurePool.s.sol:ConfigurePoolScript --rpc-url ${SEPOLI
 
 # Deposit funds to the vault
 echo "Depositing funds to the vault..."
-forge script ./script/Interactions.s.sol:DepositScript --rpc-url ${SEPOLIA_RPC_URL} --value 10000000000000000 --account updraft --broadcast --sig "run(address)" ${VAULT_ADDRESS}
+cast send ${VAULT_ADDRESS} --value 10000000000000000 --rpc-url ${SEPOLIA_RPC_URL} --account updraft "deposit()"
 
 # Wait a beat for some interest to accrue
 
 # Bridge the funds using the script to zksync 
 echo "Bridging the funds using the script to ZKsync..."
 SEPOLIA_BALANCE_BEFORE=$(cast balance $(cast wallet address --account updraft) --erc20 ${SEPOLIA_REBASE_TOKEN_ADDRESS} --rpc-url ${SEPOLIA_RPC_URL})
-echo "Sepolia balance before bridhing: $SEPOLIA_BALANCE_BEFORE"
-forge script ./script/BridgeTokens.s.sol:BridgeTokensScript --rpc-url ${SEPOLIA_RPC_URL} --account updraft --broadcast --sig "run(address,address,uint256, address)" $(cast wallet address --acount updraft) ${ZKSYNC_REBASE_TOKEN_ADDRESS} 10000000000000000
+echo "Sepolia balance before bridging: $SEPOLIA_BALANCE_BEFORE"
+forge script ./script/BridgeTokens.s.sol:BridgeTokensScript --rpc-url ${SEPOLIA_RPC_URL} --account updraft --broadcast --sig "sendMessage(address,uint64,address,uint256,address,address)" 10000000000000000 ${ZKSYNC_SEPOLIA_CHAIN_SELECTOR} ${SEPOLIA_REBASE_TOKEN_ADDRESS} $(cast max-uint) ${SEPOLIA_LINK_ADDRESS} ${SEPOLIA_ROUTER}
 echo "Funds bridged to ZKsync"
 SEPOLIA_BALANCE_AFTER=$(cast balance $(cast wallet address --account updraft) --erc20 ${SEPOLIA_REBASE_TOKEN_ADDRESS} --rpc-url ${SEPOLIA_RPC_URL})
 echo "Sepolia balance after bridging: $SEPOLIA_BALANCE_AFTER"
 
 
-# 3. On ZKsync!
-
-# Configure the pool on ZKsync
-echo "Configuring the pool on ZKsync..."
-# CHAIN_UPDATE_OBJECT=$(forge script ./script/ConfigurePool.s.sol:ConfigurePoolScript --rpc-url ${ZKSYNC_SEPOLIA_RPC_URL} --account updraft --broadcast --sig "createChainUpdateObject(uint64,address,address,bool,uint128,uint128,bool,uint128,uint128)" ${SEPOLIA_CHAIN_SELECTOR} ${SEPOLIA_POOL_ADDRESS} ${SEPOLIA_REBASE_TOKEN_ADDRESS} false 0 0 false 0 0)
-cast send ${ZKSYNC_POOL_ADDRESS} "applyChainUpdates((uint64,bool,address,address,(bool,uint128,uint128),(bool,uint128,uint128))[])" [(${SEPOLIA_CHAIN_SELECTOR},true,${SEPOLIA_POOL_ADDRESS},${SEPOLIA_REBASE_TOKEN_ADDRESS},(false,0,0),(false,0,0))] --rpc-url ${ZKSYNC_SEPOLIA_RPC_URL} --account updraft 
-
-# Bridge back to Sepolia
-
-# 4. On Sepolia!
-
-# Withdraw funds from the vault
-echo "Withdrawing funds from the vault..."
-forge script ./script/Interactions.s.sol:WithdrawScript --rpc-url ${SEPOLIA_RPC_URL} --account updraft --broadcast --sig "run(address)" ${VAULT_ADDRESS}

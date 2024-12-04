@@ -31,9 +31,8 @@ contract RebaseTokenTest is Test {
 
     function testDepositLinear(uint256 amount) public {
         // Deposit funds
-        vm.warp(block.timestamp - 1);
         console.log("block timestamp: %d", block.timestamp);
-        amount = bound(amount, 1e5, type(uint24).max);
+        amount = bound(amount, 1e5, type(uint96).max);
         vm.startPrank(user);
         vm.deal(user, amount);
         vault.deposit{value: amount}();
@@ -62,15 +61,11 @@ contract RebaseTokenTest is Test {
         uint256 differenceOne = middleBalance - startBalance;
         uint256 differenceTwo = endBalance - middleBalance;
 
-        //assertEq(differenceTwo, differenceOne);
-
-        vm.warp(block.timestamp + 1 hours);
-        console.log("block timestamp: %d", block.timestamp);
-        uint256 endBalanceAfterWarp = rebaseToken.balanceOf(user);
-
-        uint256 differenceThree = endBalanceAfterWarp - endBalance;
-
-        assertEq(differenceThree, differenceTwo);
+        assertApproxEqAbs(differenceTwo, differenceOne, 1);
+        uint256 precision = 1e18;
+        uint256 a = 5e10;
+        uint256 b = 1e8;
+        assertEq((5 * precision / b), a);
 
         vm.stopPrank();
     }

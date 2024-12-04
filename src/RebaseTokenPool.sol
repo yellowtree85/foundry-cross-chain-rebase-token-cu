@@ -26,7 +26,6 @@ contract RebaseTokenPool is TokenPool {
         address receiver = abi.decode(lockOrBurnIn.receiver, (address));
         // Burn the tokens on the source chain. This returns their userAccumulatedInterest before the tokens were burned (in case all tokens were burned, we don't want to send 0 cross-chain)
         uint256 userInterestRate = IRebaseToken(address(i_token)).getUserInterestRate(receiver);
-        // NOTE: need to send this cross-chain as well but not sure how as need to set a higher data limit!
         //uint256 currentInterestRate = IRebaseToken(address(i_token)).getInterestRate();
         IRebaseToken(address(i_token)).burn(address(this), lockOrBurnIn.amount);
 

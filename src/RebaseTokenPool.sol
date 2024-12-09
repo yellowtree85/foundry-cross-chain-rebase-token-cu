@@ -8,9 +8,6 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IRebaseToken} from "./interfaces/IRebaseToken.sol";
 
 contract RebaseTokenPool is TokenPool {
-    event Deposit(address indexed user, uint256 amount, uint256 userInterestRate);
-    event Redeem(address indexed user, uint256 amount);
-
     constructor(IERC20 token, address[] memory allowlist, address rmnProxy, address router)
         TokenPool(token, 18, allowlist, rmnProxy, router)
     {}

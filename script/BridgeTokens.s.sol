@@ -23,7 +23,7 @@ contract BridgeTokensScript is Script {
             receiver: abi.encode(receiverAddress), // we need to encode the address to bytes
             data: "", // We don't need any data for this example
             tokenAmounts: tokenToSendDetails, // this needs to be of type EVMTokenAmount[] as you could send multiple tokens
-            extraArgs: Client._argsToBytes(Client.EVMExtraArgsV1({gasLimit: 0})), // We don't need any extra args for this example
+            extraArgs: Client._argsToBytes(Client.EVMExtraArgsV1({gasLimit: 500_000})), // We don't need any extra args for this example
             feeToken: linkTokenAddress // The token used to pay for the fee
         });
         return message;

@@ -2,68 +2,41 @@
 pragma solidity ^0.8.24;
 
 import {Script} from "forge-std/Script.sol";
-import {CCIPLocalSimulatorFork, Register} from "@chainlink/local/src/ccip/CCIPLocalSimulatorFork.sol";
+
+import {CCIPLocalSimulatorFork, Register} from "@chainlink-local/src/ccip/CCIPLocalSimulatorFork.sol";
+
+import {IERC20} from "@ccip/contracts/src/v0.8/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
 import {RegistryModuleOwnerCustom} from "@ccip/contracts/src/v0.8/ccip/tokenAdminRegistry/RegistryModuleOwnerCustom.sol";
 import {TokenAdminRegistry} from "@ccip/contracts/src/v0.8/ccip/tokenAdminRegistry/TokenAdminRegistry.sol";
-import {IERC20} from "@ccip/contracts/src/v0.8/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
 
 import {RebaseToken} from "../src/RebaseToken.sol";
-import {IRebaseToken} from "../src/interfaces/IRebaseToken.sol";
 import {RebaseTokenPool} from "../src/RebaseTokenPool.sol";
 import {Vault} from "../src/Vault.sol";
 
-contract TokenDeployer is Script {
-    CCIPLocalSimulatorFork public ccipLocalSimulatorFork;
-    Register.NetworkDetails public networkDetails;
+import {IRebaseToken} from "../src/interfaces/IRebaseToken.sol";
 
-    RegistryModuleOwnerCustom public registryModuleOwnerCustom;
-    TokenAdminRegistry public tokenAdminRegistry;
-
+contract TokenAndPoolDeployer is Script {
     function run() public returns (RebaseToken token, RebaseTokenPool pool) {
-        ccipLocalSimulatorFork = new CCIPLocalSimulatorFork();
-        networkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
-
-        registryModuleOwnerCustom = RegistryModuleOwnerCustom(networkDetails.registryModuleOwnerCustomAddress);
-        tokenAdminRegistry = TokenAdminRegistry(networkDetails.tokenAdminRegistryAddress);
+        CCIPLocalSimulatorFork ccipLocalSimulatorFork = new CCIPLocalSimulatorFork();
+        Register.NetworkDetails memory networkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
         vm.startBroadcast();
-
-        // Step 1) Deploy token
         token = new RebaseToken();
-
-        // Step 2) Deploy pool
-        address[] memory allowlist = new address[](0);
         pool = new RebaseTokenPool(
-            IERC20(address(token)), allowlist, networkDetails.rmnProxyAddress, networkDetails.routerAddress
+            IERC20(address(token)), new address[](0), networkDetails.rmnProxyAddress, networkDetails.routerAddress
         );
-
         token.grantMintAndBurnRole(address(pool));
-
-        // Step 4) Claim Admin role
-        registryModuleOwnerCustom.registerAdminViaOwner(address(token));
-
-        // Step 5) Accept Admin role
-        tokenAdminRegistry.acceptAdminRole(address(token));
-
-        // Step 6) Link token to pool
-        tokenAdminRegistry.setPool(address(token), address(pool));
-
+        RegistryModuleOwnerCustom(networkDetails.registryModuleOwnerCustomAddress).registerAdminViaOwner(address(token));
+        TokenAdminRegistry(networkDetails.tokenAdminRegistryAddress).acceptAdminRole(address(token));
+        TokenAdminRegistry(networkDetails.tokenAdminRegistryAddress).setPool(address(token), address(pool));
         vm.stopBroadcast();
     }
 }
 
-// Only on the source chain!
 contract VaultDeployer is Script {
     function run(address _rebaseToken) public returns (Vault vault) {
-        // NOTE: what can I do instead of this by making it interactive? Do I even need this line if I'm using a wallet for this?
-        //uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast();
-
-        // Step 1) Deploy the vault
         vault = new Vault(IRebaseToken(_rebaseToken));
-
-        // Step 2) Claim burn and mint role
         IRebaseToken(_rebaseToken).grantMintAndBurnRole(address(vault));
-
         vm.stopBroadcast();
     }
 }

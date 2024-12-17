@@ -6,9 +6,11 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 
 /*
- * @title RebaseToken
- * @author Ciara Nightingale 
- * @notice This contract is a cross-chain token that allows users to mint and burn tokens with interest. Users deposit into the Vault on the source chain and are minted tokens. They can then send these tokens cross-chain or transfer them to someone else. Whatever interest they have accrued since the last time their balance was updated is minted to them. When they redeem their tokens, their interest is also minted to them and then whatever they redeem is burned. The users interest is equal to the contract interest rate at the time of minting (or reciving a token transfer if the reciever does not already have an interestRate). This is true even when they bridge their tokens to another chain. The interest rate is updated by the protocol on the source chain and can only decrease over time.
+* @title RebaseToken
+* @author Ciara Nightingale
+* @notice This is a cross-chain rebase token that incentivises users to deposit into a vault and gain interest in rewards.
+* @notice The interest rate in the smart contract can only decrease 
+* @notice Each will user will have their own interest rate that is the global interest rate at the time of depositing.
 */
 contract RebaseToken is ERC20, Ownable, AccessControl {
     /////////////////////
@@ -24,14 +26,9 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
     /////////////////////
     // Events
     /////////////////////
-    event UserInterestRateUpdated(address indexed user, uint256 newUserInterestRate);
-    event ToInterestAccrued(address indexed user, uint256 balance);
-    event FromInterestAccrued(address indexed user, uint256 balance);
     event InterestRateUpdated(uint256 newInterestRate);
 
-    constructor() Ownable(msg.sender) ERC20("RebaseToken", "RBT") {
-        _grantRole(MINT_AND_BURN_ROLE, msg.sender); // so that the owner can update the interest rate
-    }
+    constructor() Ownable(msg.sender) ERC20("RebaseToken", "RBT") {}
 
     /////////////////////
     // Functions
@@ -52,12 +49,18 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
      * @notice only allow the interest rate to decrease but we don't want it to revert in case it's the destination chain that is updating the interest rate (in which case it'll either be the same or larger so it won't update)
      *
      */
-    function setInterestRate(uint256 _interestRate) external onlyOwner {
-        if (_interestRate < s_interestRate) {
-            // if this is coming from the destination chain, this wont be updated since it will be greater (or equal to) the current interest rate
-            s_interestRate = _interestRate;
-            emit InterestRateUpdated(_interestRate);
+    /**
+     * @notice Set the interest rate in the contract
+     * @param _newInterestRate The new interest rate to set
+     * @dev The interest rate can only decrease
+     */
+    function setInterestRate(uint256 _newInterestRate) external onlyOwner {
+        // Set the interest rate
+        if (_newInterestRate >= s_interestRate) {
+            revert RebaseToken__InterestRateCanOnlyDecrease(s_interestRate, _newInterestRate);
         }
+        s_interestRate = _newInterestRate;
+        emit InterestRateSet(_newInterestRate);
     }
     /**
      * @dev returns the principal balance of the user. The principal balance is the last
@@ -78,9 +81,9 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
     /// @dev this function increases the total supply.
     function mint(address _account, uint256 _value, uint256 _interestRate) public onlyRole(MINT_AND_BURN_ROLE) {
         // Mints any existing interest that has accrued since the last time the user's balance was updated.
-        _beforeUpdate(address(0), _account);
+        _mintAccruedInterest(_to);
         // Sets the users interest rate to either their bridged value if they are bridging or to the current interest rate if they are depositing.
-        _setUserInterestRate(_account, _interestRate);
+        s_userInterestRate[_to] = _userInterestRate;
         _mint(_account, _value);
     }
 
@@ -90,10 +93,7 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
     /// @dev this function decreases the total supply.
     function burn(address _account, uint256 _value) public onlyRole(MINT_AND_BURN_ROLE) {
         // Mints any existing interest that has accrued since the last time the user's balance was updated.
-        if (_value == type(uint256).max) {
-            _value = balanceOf(_account);
-        }
-        _beforeUpdate(_account, address(0));
+        _mintAccruedInterest(_from);
         _burn(_account, _value);
     }
 
@@ -126,10 +126,11 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
         if (_amount == type(uint256).max) {
             _amount = balanceOf(msg.sender);
         }
-        _beforeUpdate(msg.sender, _recipient);
+        _mintAccruedInterest(msg.sender);
+        _mintAccruedInterest(_recipient);
         if (balanceOf(_recipient) == 0) {
             // Update the users interest rate only if they have not yet got one (or they tranferred/burned all their tokens). Otherwise people could force others to have lower interest.
-            _setUserInterestRate(_recipient, s_userInterestRate[msg.sender]);
+            s_userInterestRate[_recipient] = s_userInterestRate[msg.sender];
         }
         return super.transfer(_recipient, _amount);
     }
@@ -147,26 +148,13 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
             _amount = balanceOf(_sender);
         }
         // accumulates the balance of the user so it is up to date with any interest accumulated.
-        _beforeUpdate(_sender, _recipient);
+        _mintAccruedInterest(_sender);
+        _mintAccruedInterest(_recipient);
         if (balanceOf(_recipient) == 0) {
             // Update the users interest rate only if they have not yet got one (or they tranferred/burned all their tokens). Otherwise people could force others to have lower interest.
-            _setUserInterestRate(_recipient, s_userInterestRate[_sender]);
+            s_userInterestRate[_recipient] = s_userInterestRate[_sender];
         }
         return super.transferFrom(_sender, _recipient, _amount);
-    }
-
-    /**
-     * @dev updates the interest rate. This is called only by the pool when a user bridges to this chain.
-     * @param _interestRate the new interest rate
-     * @notice this is called when a bridges tokens to this chain
-     *
-     */
-    function _setUserInterestRate(address _user, uint256 _interestRate) internal {
-        // called when a user deposits, bridges tokens to this chain or is transferred tokens by another user
-        // needs to be called alongside _beforeUpdate to make sure the users last updated timestamp is set.
-        // update the user's interest rate
-        s_userInterestRate[_user] = _interestRate;
-        emit UserInterestRateUpdated(_user, _interestRate);
     }
 
     /**
@@ -190,40 +178,19 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
      * @return currentBalance users new balance
      *
      */
-    function _mintAccruedInterest(address _user) internal returns (uint256 currentBalance) {
+    function _mintAccruedInterest(address _user) internal {
         // Get the user's previous principal balance. The amount of tokens they had last time their interest was minted to them.
         uint256 previousPrincipalBalance = super.balanceOf(_user);
 
         // Calculate the accrued interest since the last accumulation
         // `balanceOf` uses the user's interest rate and the time since their last update to get the updated balance
-        currentBalance = balanceOf(_user);
+        uint256 currentBalance = balanceOf(_user);
         uint256 balanceIncrease = currentBalance - previousPrincipalBalance;
 
         // Mint an amount of tokens equivalent to the interest accrued
         _mint(_user, balanceIncrease);
         // Update the user's last updated timestamp to reflect this most recent time their interest was minted to them.
         s_userLastUpdatedTimestamp[_user] = block.timestamp;
-    }
-
-    /**
-     * @dev executes the transfer of tokens, invoked by _transfer(), _mint() and _burn()
-     * @param _from the address from which transfer the tokens
-     * @param _to the destination address
-     *
-     */
-    function _beforeUpdate(address _from, address _to) internal {
-        if (_from != address(0)) {
-            // we are burning or transferring tokens
-            // mint any accrued interest since the last time the user's balance was updated
-            (uint256 fromBalance) = _mintAccruedInterest(_from);
-            emit FromInterestAccrued(_from, fromBalance);
-        }
-        if (_to != address(0)) {
-            // we are minting or transferring tokens
-            // mint any accrued interest since the last time the user's balance was updated
-            uint256 toBalance = _mintAccruedInterest(_to);
-            emit ToInterestAccrued(_to, toBalance);
-        }
     }
 
     /**

@@ -17,17 +17,16 @@ contract RebaseTokenPool is TokenPool {
         external
         virtual
         override
-        returns (Pool.LockOrBurnOutV1 memory)
+        returns (Pool.LockOrBurnOutV1 memory lockOrBurnOut)
     {
         _validateLockOrBurn(lockOrBurnIn);
-        address receiver = abi.decode(lockOrBurnIn.receiver, (address));
         // Burn the tokens on the source chain. This returns their userAccumulatedInterest before the tokens were burned (in case all tokens were burned, we don't want to send 0 cross-chain)
-        uint256 userInterestRate = IRebaseToken(address(i_token)).getUserInterestRate(receiver);
+        uint256 userInterestRate = IRebaseToken(address(i_token)).getUserInterestRate(lockOrBurnIn.originalSender);
         //uint256 currentInterestRate = IRebaseToken(address(i_token)).getInterestRate();
         IRebaseToken(address(i_token)).burn(address(this), lockOrBurnIn.amount);
 
         // encode a function call to pass the caller's info to the destination pool and update it
-        return Pool.LockOrBurnOutV1({
+        lockOrBurnOut = Pool.LockOrBurnOutV1({
             destTokenAddress: getRemoteToken(lockOrBurnIn.remoteChainSelector),
             destPoolData: abi.encode(userInterestRate)
         });

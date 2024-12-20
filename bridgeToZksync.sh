@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Define constants 
-ALLOWLIST="[]" # empty array
+AMOUNT=100000
 
 DEFAULT_ZKSYNC_LOCAL_KEY="0x7726827caac94a7f9e1b160f7ea819f172f7b6f9d2a97f992c38edeab82d4110"
 DEFAULT_ZKSYNC_ADDRESS="0x36615Cf349d7F6344891B1e7CA7C72883F5dc049"
@@ -21,6 +21,7 @@ SEPOLIA_CHAIN_SELECTOR="16015286601757825753"
 SEPOLIA_LINK_ADDRESS="0x779877A7B0D9E8603169DdbD7836e478b4624789"
 
 # Compile and deploy the Rebase Token contract
+source .env
 forge build --zksync
 echo "Compiling and deploying the Rebase Token contract on ZKsync..."
 ZKSYNC_REBASE_TOKEN_ADDRESS=$(forge create src/RebaseToken.sol:RebaseToken --rpc-url ${ZKSYNC_SEPOLIA_RPC_URL} --account updraft --legacy --zksync | awk '/Deployed to:/ {print $3}')
@@ -46,7 +47,7 @@ echo "CCIP roles and permissions set"
 # 2. On Sepolia!
 
 echo "Running the script to deploy the contracts on Sepolia..."
-output=$(forge script ./script/Deployer.s.sol:TokenDeployer --rpc-url ${SEPOLIA_RPC_URL} --account updraft --broadcast)
+output=$(forge script ./script/Deployer.s.sol:TokenAndPoolDeployer --rpc-url ${SEPOLIA_RPC_URL} --account updraft --broadcast)
 echo "Contracts deployed and permission set on Sepolia"
 
 # Extract the addresses from the output
@@ -76,7 +77,7 @@ forge script ./script/ConfigurePool.s.sol:ConfigurePoolScript --rpc-url ${SEPOLI
 
 # Deposit funds to the vault
 echo "Depositing funds to the vault on Sepolia..."
-cast send ${VAULT_ADDRESS} --value 100000000000000 --rpc-url ${SEPOLIA_RPC_URL} --account updraft "deposit()"
+cast send ${VAULT_ADDRESS} --value ${AMOUNT} --rpc-url ${SEPOLIA_RPC_URL} --account updraft "deposit()"
 
 # Wait a beat for some interest to accrue
 
@@ -88,7 +89,7 @@ cast send ${ZKSYNC_POOL_ADDRESS}  --rpc-url ${ZKSYNC_SEPOLIA_RPC_URL} --account 
 echo "Bridging the funds using the script to ZKsync..."
 SEPOLIA_BALANCE_BEFORE=$(cast balance $(cast wallet address --account updraft) --erc20 ${SEPOLIA_REBASE_TOKEN_ADDRESS} --rpc-url ${SEPOLIA_RPC_URL})
 echo "Sepolia balance before bridging: $SEPOLIA_BALANCE_BEFORE"
-forge script ./script/BridgeTokens.s.sol:BridgeTokensScript --rpc-url ${SEPOLIA_RPC_URL} --account updraft --broadcast --sig "sendMessage(address,uint64,address,uint256,address,address)" $(cast wallet address --account updraft) ${ZKSYNC_SEPOLIA_CHAIN_SELECTOR} ${SEPOLIA_REBASE_TOKEN_ADDRESS} 100000000000000 ${SEPOLIA_LINK_ADDRESS} ${SEPOLIA_ROUTER}
+forge script ./script/BridgeTokens.s.sol:BridgeTokensScript --rpc-url ${SEPOLIA_RPC_URL} --account updraft --broadcast --sig "sendMessage(address,uint64,address,uint256,address,address)" $(cast wallet address --account updraft) ${ZKSYNC_SEPOLIA_CHAIN_SELECTOR} ${SEPOLIA_REBASE_TOKEN_ADDRESS} ${AMOUNT} ${SEPOLIA_LINK_ADDRESS} ${SEPOLIA_ROUTER}
 echo "Funds bridged to ZKsync"
 SEPOLIA_BALANCE_AFTER=$(cast balance $(cast wallet address --account updraft) --erc20 ${SEPOLIA_REBASE_TOKEN_ADDRESS} --rpc-url ${SEPOLIA_RPC_URL})
 echo "Sepolia balance after bridging: $SEPOLIA_BALANCE_AFTER"

@@ -3,7 +3,7 @@ pragma solidity 0.8.24;
 
 import {console, Test} from "forge-std/Test.sol";
 
-import {CCIPLocalSimulatorFork, Register} from "@chainlink/local/src/ccip/CCIPLocalSimulatorFork.sol";
+import {CCIPLocalSimulatorFork, Register} from "@chainlink-local/src/ccip/CCIPLocalSimulatorFork.sol";
 import {TokenPool} from "@ccip/contracts/src/v0.8/ccip/pools/TokenPool.sol";
 import {RegistryModuleOwnerCustom} from "@ccip/contracts/src/v0.8/ccip/tokenAdminRegistry/RegistryModuleOwnerCustom.sol";
 import {TokenAdminRegistry} from "@ccip/contracts/src/v0.8/ccip/tokenAdminRegistry/TokenAdminRegistry.sol";
@@ -18,10 +18,6 @@ import {RebaseTokenPool} from "../src/RebaseTokenPool.sol";
 
 import {Vault} from "../src/Vault.sol";
 import {IRebaseToken} from "../src/interfaces/IRebaseToken.sol";
-
-import {TokenDeployer} from "../script/Deployer.s.sol";
-import {VaultDeployer} from "../script/Deployer.s.sol";
-import {BridgeTokensScript} from "../script/BridgeTokens.s.sol";
 
 // Tests to include
 // Test you can bridge tokens - check the balance is correct

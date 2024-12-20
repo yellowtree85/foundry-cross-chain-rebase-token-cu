@@ -13,6 +13,8 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 * @notice Each will user will have their own interest rate that is the global interest rate at the time of depositing.
 */
 contract RebaseToken is ERC20, Ownable, AccessControl {
+    error RebaseToken__InterestRateCanOnlyDecrease(uint256 currentInterestRate, uint256 newInterestRate);
+
     /////////////////////
     // State Variables
     /////////////////////
@@ -26,7 +28,11 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
     /////////////////////
     // Events
     /////////////////////
-    event InterestRateUpdated(uint256 newInterestRate);
+    event InterestRateSet(uint256 newInterestRate);
+
+    /////////////////////
+    // Constructor
+    /////////////////////
 
     constructor() Ownable(msg.sender) ERC20("RebaseToken", "RBT") {}
 
@@ -75,26 +81,26 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
     }
 
     /// @notice Mints new tokens for a given address. Called when a user either deposits or bridges tokens to this chain.
-    /// @param _account The address to mint the tokens to.
+    /// @param _to The address to mint the tokens to.
     /// @param _value The number of tokens to mint.
-    /// @param _interestRate The interest rate of the user. This is either the contract interest rate if the user is depositing or the user's interest rate from the source token if the user is bridging.
+    /// @param _userInterestRate The interest rate of the user. This is either the contract interest rate if the user is depositing or the user's interest rate from the source token if the user is bridging.
     /// @dev this function increases the total supply.
-    function mint(address _account, uint256 _value, uint256 _interestRate) public onlyRole(MINT_AND_BURN_ROLE) {
+    function mint(address _to, uint256 _value, uint256 _userInterestRate) public onlyRole(MINT_AND_BURN_ROLE) {
         // Mints any existing interest that has accrued since the last time the user's balance was updated.
         _mintAccruedInterest(_to);
         // Sets the users interest rate to either their bridged value if they are bridging or to the current interest rate if they are depositing.
         s_userInterestRate[_to] = _userInterestRate;
-        _mint(_account, _value);
+        _mint(_to, _value);
     }
 
     /// @notice Burns tokens from the sender.
-    /// @param _account The address to burn the tokens from.
+    /// @param _from The address to burn the tokens from.
     /// @param _value The number of tokens to be burned
     /// @dev this function decreases the total supply.
-    function burn(address _account, uint256 _value) public onlyRole(MINT_AND_BURN_ROLE) {
+    function burn(address _from, uint256 _value) public onlyRole(MINT_AND_BURN_ROLE) {
         // Mints any existing interest that has accrued since the last time the user's balance was updated.
         _mintAccruedInterest(_from);
-        _burn(_account, _value);
+        _burn(_from, _value);
     }
 
     /**
@@ -175,7 +181,6 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
     /**
      * @dev accumulates the accrued interest of the user to the principal balance. This function mints the users accrued interest since they last transferred or bridged tokens.
      * @param _user the address of the user for which the interest is being minted
-     * @return currentBalance users new balance
      *
      */
     function _mintAccruedInterest(address _user) internal {

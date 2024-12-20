@@ -4,7 +4,7 @@ This is a section of the Cyfrin Foundry Solidity course.
 
 # About
 
-This project is a cross-chain rebase token where users can depost ETH iin exchange for rebase tokens which accrue rewards over time.
+This project is a cross-chain rebase token where users can depost ETH in exchange for rebase tokens which accrue rewards over time.
 
 - [Foundry Cross Chain Rebase Token](#foundry-cross-chain-rebase-token)
 - [About](#about)
@@ -150,13 +150,13 @@ forge fmt
 
 # Thank you!
 
+## Project design and assumptions
+
 WHATEVER INTEREST THEY DEPOSIT WITH, THEY STICK WITH
 
 This project is a cross-chain rebase token that integrates Chainlink CCIP to enable users to bridge their tokens cross-chain
 
-## Project design and assumptions
-
-## NOTES
+### NOTES
 
 - assumed rewards are in contract
 - Protocol rewards early users and users which bridge to the L2

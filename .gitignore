@@ -17,3 +17,5 @@ docs/
 
 # scripts
 arb.sh
+
+foundry.toml

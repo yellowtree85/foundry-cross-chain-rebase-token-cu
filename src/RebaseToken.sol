@@ -117,7 +117,7 @@ contract RebaseToken is ERC20, Ownable, AccessControl {
             return 0;
         }
         // shares * current accumulated interest for that user since their interest was last minted to them.
-        return (currentPrincipalBalance * _calculateUserAccumulatedInterestSinceLastUpdate(_user) / PRECISION_FACTOR);
+        return (currentPrincipalBalance * _calculateUserAccumulatedInterestSinceLastUpdate(_user)) / PRECISION_FACTOR;
     }
 
     /**

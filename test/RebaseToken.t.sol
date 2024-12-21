@@ -31,41 +31,30 @@ contract RebaseTokenTest is Test {
 
     function testDepositLinear(uint256 amount) public {
         // Deposit funds
-        console.log("block timestamp: %d", block.timestamp);
         amount = bound(amount, 1e5, type(uint96).max);
+        // 1. deposit
         vm.startPrank(user);
         vm.deal(user, amount);
         vault.deposit{value: amount}();
+        // 2. check our rebase token balance
         uint256 startBalance = rebaseToken.balanceOf(user);
-        console.log("User start balance: %d", startBalance);
+        console.log("block.timestamp", block.timestamp);
+        console.log("startBalance", startBalance);
         assertEq(startBalance, amount);
-
-        // check the balance has increased after 1 hour has passed
+        // 3. warp the time and check the balance again
         vm.warp(block.timestamp + 1 hours);
-
-        console.log("block timestamp: %d", block.timestamp);
+        console.log("block.timestamp", block.timestamp);
         uint256 middleBalance = rebaseToken.balanceOf(user);
-        console.log("User middle balance: %d", middleBalance);
-
-        //assertGt(middleBalance, startBalance);
-
-        // check the balance has increased after 1 hour has passed
+        console.log("middleBalance", middleBalance);
+        assertGt(middleBalance, startBalance);
+        // 4. warp the time again by the same amount and check the balance again
         vm.warp(block.timestamp + 1 hours);
-        console.log("block timestamp: %d", block.timestamp);
-
         uint256 endBalance = rebaseToken.balanceOf(user);
-        console.log("User end balance: %d", endBalance);
-
+        console.log("block.timestamp", block.timestamp);
+        console.log("endBalance", endBalance);
         assertGt(endBalance, middleBalance);
 
-        uint256 differenceOne = middleBalance - startBalance;
-        uint256 differenceTwo = endBalance - middleBalance;
-
-        assertApproxEqAbs(differenceTwo, differenceOne, 1);
-        uint256 precision = 1e18;
-        uint256 a = 5e10;
-        uint256 b = 1e8;
-        assertEq((5 * precision / b), a);
+        assertApproxEqAbs(endBalance - middleBalance, middleBalance - startBalance, 1);
 
         vm.stopPrank();
     }
@@ -193,7 +182,7 @@ contract RebaseTokenTest is Test {
 
     function testSetInterestRate(uint256 newInterestRate) public {
         // bound the interest rate to be less than the current interest rate
-        newInterestRate = bound(newInterestRate, 0, rebaseToken.getInterestRate());
+        newInterestRate = bound(newInterestRate, 0, rebaseToken.getInterestRate() - 1);
         // Update the interest rate
         vm.startPrank(owner);
         rebaseToken.setInterestRate(newInterestRate);
@@ -218,14 +207,13 @@ contract RebaseTokenTest is Test {
         vm.stopPrank();
     }
 
-    function testInterestRateDoesntUpdateIfMoreThanPreviousRate(uint256 newInterestRate) public {
-        // make sure the new interest rate is less than the previous interest rate
-        newInterestRate = bound(newInterestRate, rebaseToken.getInterestRate() + 1, type(uint96).max);
+    function testInterestRateCanOnlyDecrease(uint256 newInterestRate) public {
+        uint256 initialInterestRate = rebaseToken.getInterestRate();
+        newInterestRate = bound(newInterestRate, initialInterestRate, type(uint96).max);
         vm.prank(owner);
-
+        vm.expectPartialRevert(bytes4(RebaseToken.RebaseToken__InterestRateCanOnlyDecrease.selector));
         rebaseToken.setInterestRate(newInterestRate);
-        uint256 interestRate = rebaseToken.getInterestRate();
-        assertNotEq(interestRate, newInterestRate);
+        assertEq(rebaseToken.getInterestRate(), initialInterestRate);
     }
 
     function testGetPrincipleAmount() public {

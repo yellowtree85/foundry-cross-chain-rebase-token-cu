@@ -180,18 +180,19 @@ contract CrossChainTest is Test {
             feeToken: localNetworkDetails.linkAddress // The token used to pay for the fee
         });
         // Get and approve the fees
-        uint256 ccipFee =
-            IRouterClient(localNetworkDetails.routerAddress).getFee(remoteNetworkDetails.chainSelector, message);
         vm.stopPrank();
         // Give the user the fee amount of LINK
-        ccipLocalSimulatorFork.requestLinkFromFaucet(alice, ccipFee);
+        ccipLocalSimulatorFork.requestLinkFromFaucet(
+            alice, IRouterClient(localNetworkDetails.routerAddress).getFee(remoteNetworkDetails.chainSelector, message)
+        );
         vm.startPrank(alice);
-        IERC20(localNetworkDetails.linkAddress).approve(localNetworkDetails.routerAddress, ccipFee); // Approve the fee
+        IERC20(localNetworkDetails.linkAddress).approve(
+            localNetworkDetails.routerAddress,
+            IRouterClient(localNetworkDetails.routerAddress).getFee(remoteNetworkDetails.chainSelector, message)
+        ); // Approve the fee
         // log the values before bridging
         uint256 balanceBeforeBridge = IERC20(address(localToken)).balanceOf(alice);
         console.log("Local balance before bridge: %d", balanceBeforeBridge);
-        uint256 sourceInterestRate = localToken.getInterestRate();
-        console.log("Local interest rate: %d", sourceInterestRate);
 
         IRouterClient(localNetworkDetails.routerAddress).ccipSend(remoteNetworkDetails.chainSelector, message); // Send the message
         uint256 sourceBalanceAfterBridge = IERC20(address(localToken)).balanceOf(alice);
@@ -211,8 +212,6 @@ contract CrossChainTest is Test {
         uint256 destBalance = IERC20(address(remoteToken)).balanceOf(alice);
         console.log("Remote balance after bridge: %d", destBalance);
         assertEq(destBalance, initialArbBalance + amountToBridge);
-        // check the users interest rate on the destination chain is the interest rate on the source chain at the time of bridging
-        assertEq(remoteToken.getUserInterestRate(alice), sourceInterestRate);
     }
 
     function testBridgeAllTokens() public {

@@ -38,5 +38,6 @@ contract ConfigurePoolScript is Script {
             })
         });
         TokenPool(localPool).applyChainUpdates(new uint64[](0), chainsToAdd);
+        vm.stopBroadcast();
     }
 }

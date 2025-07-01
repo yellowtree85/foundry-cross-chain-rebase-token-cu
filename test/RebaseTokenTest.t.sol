@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.24;
+pragma solidity ^0.8.24;
 
 import {console, Test} from "forge-std/Test.sol";
 
-import {RebaseToken} from "../src/RebaseToken.sol";
 import {Vault} from "../src/Vault.sol";
 
+import {RebaseToken} from "../src/RebaseToken.sol";
 import {IRebaseToken} from "../src/interfaces/IRebaseToken.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {IAccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 
 contract RebaseTokenTest is Test {
     RebaseToken public rebaseToken;
@@ -17,7 +19,7 @@ contract RebaseTokenTest is Test {
     uint256 public SEND_VALUE = 1e5;
 
     function addRewardsToVault(uint256 amount) public {
-        // send some rewards to the vault using the receive function
+        // send some rewards to the vault using the receive function for redeem to user
         payable(address(vault)).call{value: amount}("");
     }
 
@@ -29,6 +31,10 @@ contract RebaseTokenTest is Test {
         vm.stopPrank();
     }
 
+    /**
+     * @dev Test depositing funds into the vault and the interest rate(accrued) is linear in equvalent interval time and if you have not deposited before or if you haven't interacted with the contract after the last deposit
+     * @param amount  The amount to deposit
+     */
     function testDepositLinear(uint256 amount) public {
         // Deposit funds
         amount = bound(amount, 1e5, type(uint96).max);
@@ -54,29 +60,35 @@ contract RebaseTokenTest is Test {
         console.log("endBalance", endBalance);
         assertGt(endBalance, middleBalance);
 
+        //检查两个数值是否在绝对误差范围内近似相等 ∣a−b∣≤1wei
         assertApproxEqAbs(endBalance - middleBalance, middleBalance - startBalance, 1);
 
         vm.stopPrank();
     }
 
+    // no accruded interest
     function testRedeemStraightAway(uint256 amount) public {
         amount = bound(amount, 1e5, type(uint96).max);
         // Deposit funds
         vm.startPrank(user);
         vm.deal(user, amount);
         vault.deposit{value: amount}();
+        assertEq(address(user).balance, 0);
+        assertEq(rebaseToken.balanceOf(user), amount);
 
         // Redeem funds
-        vault.redeem(amount);
+        vault.redeem(type(uint256).max); // withdraw entire balance
+        // vault.redeem(amount);
 
         uint256 balance = rebaseToken.balanceOf(user);
-        console.log("User balance: %d", balance);
+        console.log("User balance: %s", balance);
         assertEq(balance, 0);
+        assertEq(address(user).balance, amount);
         vm.stopPrank();
     }
 
     function testRedeemAfterTimeHasPassed(uint256 depositAmount, uint256 time) public {
-        time = bound(time, 1000, type(uint96).max); // this is a crazy number of years - 2^96 seconds is a lot
+        time = bound(time, 1000, type(uint96).max); // this is a crazy number of years - 2^96 seconds  ≈ 2.51e21 years
         depositAmount = bound(depositAmount, 1e5, type(uint96).max); // this is an Ether value of max 2^78 which is crazy
 
         // Deposit funds
@@ -85,7 +97,7 @@ contract RebaseTokenTest is Test {
         vault.deposit{value: depositAmount}();
 
         // check the balance has increased after some time has passed
-        vm.warp(time);
+        vm.warp(block.timestamp + time);
 
         // Get balance after time has passed
         uint256 balance = rebaseToken.balanceOf(user);
@@ -98,9 +110,9 @@ contract RebaseTokenTest is Test {
         // Redeem funds
         vm.prank(user);
         vault.redeem(balance);
+        assertEq(rebaseToken.balanceOf(user), 0);
 
         uint256 ethBalance = address(user).balance;
-
         assertEq(balance, ethBalance);
         assertGt(balance, depositAmount);
     }
@@ -109,7 +121,8 @@ contract RebaseTokenTest is Test {
         // Deposit funds
         vm.startPrank(user);
         uint256 interestRate = rebaseToken.getInterestRate();
-        vm.expectRevert();
+        // vm.expectRevert();
+        vm.expectPartialRevert(IAccessControl.AccessControlUnauthorizedAccount.selector);
         rebaseToken.mint(user, SEND_VALUE, interestRate);
         vm.stopPrank();
     }
@@ -117,9 +130,42 @@ contract RebaseTokenTest is Test {
     function testCannotCallBurn() public {
         // Deposit funds
         vm.startPrank(user);
-        vm.expectRevert();
+        // vm.expectRevert();
+        //vm.expectPartialRevert don't contain parameters
+        vm.expectPartialRevert(IAccessControl.AccessControlUnauthorizedAccount.selector);
         rebaseToken.burn(user, SEND_VALUE);
         vm.stopPrank();
+    }
+
+    /**
+     * @dev Test that the user can mint tokens if they have the mint and burn role
+     */
+    function testMintAndBurnRoleUserCanMint() public {
+        // grant mint and burn role to the user
+        vm.prank(owner);
+        rebaseToken.grantMintAndBurnRole(user);
+
+        vm.startPrank(user);
+        rebaseToken.mint(user, SEND_VALUE, rebaseToken.getInterestRate());
+        vm.stopPrank();
+        assertEq(rebaseToken.balanceOf(user), SEND_VALUE);
+    }
+
+    /**
+     * @dev Test that the user can mint tokens if they have the mint and burn role
+     */
+    function testMintAndBurnRoleUserCanBurn() public {
+        // grant mint and burn role to the user
+        vm.prank(owner);
+        rebaseToken.grantMintAndBurnRole(user);
+
+        vm.startPrank(user);
+        rebaseToken.mint(user, SEND_VALUE, rebaseToken.getInterestRate());
+        assertEq(rebaseToken.balanceOf(user), SEND_VALUE);
+
+        rebaseToken.burn(user, SEND_VALUE);
+        vm.stopPrank();
+        assertEq(rebaseToken.balanceOf(user), 0);
     }
 
     function testCannotWithdrawMoreThanBalance() public {
@@ -132,11 +178,14 @@ contract RebaseTokenTest is Test {
         vm.stopPrank();
     }
 
-    function testDeposit(uint256 amount) public {
+    function testDepositStraight(uint256 amount) public {
         amount = bound(amount, 1e3, type(uint96).max);
         vm.deal(user, amount);
         vm.prank(user);
         vault.deposit{value: amount}();
+        assertEq(address(user).balance, 0);
+        assertEq(address(vault).balance, amount);
+        assertEq(rebaseToken.balanceOf(user), amount);
     }
 
     function testTransfer(uint256 amount, uint256 amountToSend) public {
@@ -146,11 +195,11 @@ contract RebaseTokenTest is Test {
         vm.deal(user, amount);
         vm.prank(user);
         vault.deposit{value: amount}();
+        uint256 userBalance = rebaseToken.balanceOf(user);
+        assertEq(userBalance, amount);
 
         address userTwo = makeAddr("userTwo");
-        uint256 userBalance = rebaseToken.balanceOf(user);
         uint256 userTwoBalance = rebaseToken.balanceOf(userTwo);
-        assertEq(userBalance, amount);
         assertEq(userTwoBalance, 0);
 
         // Update the interest rate so we can check the user interest rates are different after transferring.
@@ -180,6 +229,41 @@ contract RebaseTokenTest is Test {
         assertGt(userTwoBalanceAfterWarp, userTwoBalancAfterTransfer);
     }
 
+    function testTransferFrom(uint256 amount, uint256 amountToSend) public {
+        amount = bound(amount, 1e5 + 1e3, type(uint96).max);
+        amountToSend = bound(amountToSend, 1e5, amount - 1e3);
+
+        vm.deal(user, amount);
+        vm.startPrank(user);
+        vault.deposit{value: amount}();
+        uint256 userBalance = rebaseToken.balanceOf(user);
+        assertEq(userBalance, amount);
+
+        address userTwo = makeAddr("userTwo");
+        uint256 userTwoBalance = rebaseToken.balanceOf(userTwo);
+        assertEq(userTwoBalance, 0);
+
+        // user approves the current contract to spend their tokens
+        rebaseToken.approve(address(this), amountToSend);
+        assertEq(rebaseToken.allowance(user, address(this)), amountToSend);
+        vm.stopPrank();
+
+        // current contract transfers the tokens from user to userTwo
+        rebaseToken.transferFrom(user, userTwo, amountToSend);
+
+        assertEq(rebaseToken.balanceOf(user), userBalance - amountToSend);
+        assertEq(rebaseToken.balanceOf(userTwo), userTwoBalance + amountToSend);
+
+        assertEq(rebaseToken.allowance(user, address(this)), 0);
+
+        assertEq(rebaseToken.getUserInterestRate(user), 5e10);
+        assertEq(rebaseToken.getUserInterestRate(userTwo), 5e10);
+    }
+
+    /**
+     * @dev Test that the interest rate can be set by the owner
+     * @param newInterestRate  The new interest rate to set
+     */
     function testSetInterestRate(uint256 newInterestRate) public {
         // bound the interest rate to be less than the current interest rate
         newInterestRate = bound(newInterestRate, 0, rebaseToken.getInterestRate() - 1);
@@ -199,10 +283,16 @@ contract RebaseTokenTest is Test {
         assertEq(userInterestRate, newInterestRate);
     }
 
+    /**
+     * @dev Test that the interest rate cannot be set by an unauthorized account
+     * @param newInterestRate  The new interest rate to set
+     */
     function testCannotSetInterestRate(uint256 newInterestRate) public {
         // Update the interest rate
         vm.startPrank(user);
-        vm.expectRevert();
+        // vm.expectRevert();
+        // vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, user));
+        vm.expectPartialRevert(Ownable.OwnableUnauthorizedAccount.selector);
         rebaseToken.setInterestRate(newInterestRate);
         vm.stopPrank();
     }
@@ -228,5 +318,10 @@ contract RebaseTokenTest is Test {
         vm.warp(block.timestamp + 1 days);
         uint256 principleAmountAfterWarp = rebaseToken.principalBalanceOf(user);
         assertEq(principleAmountAfterWarp, amount);
+    }
+
+    function testRebaseTokenAddress() public view {
+        address rebaseTokenAddress = address(vault.i_rebaseToken());
+        assertEq(rebaseTokenAddress, address(rebaseToken));
     }
 }
